@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "755929983585",
+    "project_id": "fan-react-35372",
+    "storage_bucket": "fan-react-35372.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:755929983585:android:69cf0f438540fffbf91820",
+        "android_client_info": {
+          "package_name": "com.example.fan_react"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCypY0GVMHocgzmPMBqeol7VeGiuROrACY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
