@@ -1,8 +1,13 @@
 import 'dart:io';
 import 'package:app_settings/app_settings.dart';
+import 'package:fan_react/main.dart';
+import 'package:fan_react/screens/home/home_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   static final NotificationService _notificationService =
@@ -17,6 +22,8 @@ class NotificationService {
   NotificationService._internal();
 
   Future<void> init() async {
+    tz.initializeTimeZones();
+
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('ic_cup');
 
@@ -37,8 +44,9 @@ class NotificationService {
     await _flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
-        // Handle notification tap
+        _handleNotificationTap(response.payload);
       },
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     bool isChecked = await _loadPermissionStatus();
@@ -56,14 +64,13 @@ class NotificationService {
       }
 
       if (isChecked) {
-        await AppSettings.openAppSettings(type: AppSettingsType.notification);
+        // await AppSettings.openAppSettings(type: AppSettingsType.notification);
         _savePermissionStatus();
       }
       if (status.isGranted && isChecked) {
-        await AppSettings.openAppSettings(type: AppSettingsType.notification);
         _savePermissionStatus();
+        _scheduleInactiveNotification();
       } else if (status.isDenied || status.isPermanentlyDenied && isChecked) {
-        await AppSettings.openAppSettings(type: AppSettingsType.notification);
         _savePermissionStatus();
       }
     } else if (Platform.isAndroid) {
@@ -82,8 +89,8 @@ class NotificationService {
           await androidPlugin.requestNotificationsPermission();
           _savePermissionStatus();
         } else {
-          await AppSettings.openAppSettings(type: AppSettingsType.notification);
           _savePermissionStatus();
+          _scheduleInactiveNotification();
         }
       }
     }
@@ -92,9 +99,9 @@ class NotificationService {
   Future<void> showNotification() async {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'clearance_card',
-      'Calculator Notifications',
-      channelDescription: 'Notifications for the Calculator app',
+      'Fun React',
+      'Fun React Notifications',
+      channelDescription: 'Notifications for the Fun React app',
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
@@ -113,10 +120,10 @@ class NotificationService {
 
     await _flutterLocalNotificationsPlugin.show(
       0,
-      'Calculator',
-      'Let\'s calculate!',
+      'Miss the action?',
+      'New matches are waiting for your reactions!',
       platformChannelSpecifics,
-      payload: '',
+      payload: 'Navigate to Home screen',
     );
   }
 
@@ -128,5 +135,97 @@ class NotificationService {
   Future<bool> _loadPermissionStatus() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('hasCheckedNotificationPermission') ?? false;
+  }
+
+  // Top-level function for background notification handling
+  @pragma('vm:entry-point')
+  static void notificationTapBackground(
+      NotificationResponse notificationResponse) {
+    debugPrint(
+        'Notification tapped in background: ${notificationResponse.payload}');
+    _handleNotificationTap(notificationResponse.payload);
+  }
+
+  // Centralized method to handle notification tap and navigation
+  static void _handleNotificationTap(String? payload) {
+    final navigator = Navigator.of(navigatorKey.currentContext!);
+    if (navigator.mounted) {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(payload: payload ?? 'No data'),
+        ),
+      );
+    } else {
+      debugPrint('Navigator is not mounted, skipping navigation');
+    }
+  }
+
+  // Schedule notification for inactive users (more than 3 days)
+  Future<void> _scheduleInactiveNotification() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastLogin = prefs.getInt('lastLoginTime') ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    const threeDaysInMillis = 3 * 24 * 60 * 60 * 1000;
+
+    if (now - lastLogin > threeDaysInMillis) {
+      await _cancelScheduledNotification();
+      await _scheduleDailyNotification();
+    }
+  }
+
+  // Schedule a daily notification at 10:00
+  Future<void> _scheduleDailyNotification() async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'inactive_channel',
+      'Inactive User Notifications',
+      channelDescription: 'Notifications for inactive users',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const DarwinNotificationDetails iOSDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iOSDetails,
+    );
+
+    final scheduleTime = tz.TZDateTime(
+      tz.local,
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+      10,
+      0,
+      0,
+    ).add(const Duration(days: 1)); // Schedule for next 10:00
+
+    await _flutterLocalNotificationsPlugin.zonedSchedule(
+      1,
+      'Miss the action?',
+      'New matches are waiting for your reactions!',
+      scheduleTime,
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: 'Navigate to Home screen',
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+  }
+
+  // Cancel any existing scheduled notification
+  Future<void> _cancelScheduledNotification() async {
+    await _flutterLocalNotificationsPlugin.cancel(1);
+  }
+
+  // Update last login time
+  Future<void> updateLastLoginTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lastLoginTime', DateTime.now().millisecondsSinceEpoch);
+    await _scheduleInactiveNotification();
   }
 }

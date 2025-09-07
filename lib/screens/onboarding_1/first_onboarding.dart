@@ -1,3 +1,4 @@
+import 'package:fan_react/services/notification_service.dart';
 import 'package:flutter/material.dart';
 
 class FirstOnboarding extends StatelessWidget {
@@ -8,7 +9,9 @@ class FirstOnboarding extends StatelessWidget {
     return Scaffold(
         appBar: AppBar(),
         body: Container(
-          child: Text('ON_B_!'),
+          child: InkWell(
+              onTap: () async => await NotificationService().showNotification(),
+              child: Text('ON_B_!')),
         ));
   }
 }
