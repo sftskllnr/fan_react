@@ -1,5 +1,4 @@
 // ASSETS
-
 // svg
 String sendDisabled = 'assets/svg/send_disabled.svg';
 String sendActive = 'assets/svg/send_active.svgs';
@@ -49,5 +48,47 @@ String mindBlown = 'assets/svg/mind_blown.svg';
 String fanInLove = 'assets/svg/fan_in_love.svg';
 String preloaderBack = 'assets/svg/preloader_back.svg';
 
+// png
+String firstOnboard = 'assets/png/first_onboard.png';
+String secondOnboard = 'assets/png/second_onboard.png';
+
 // lottie
 String preloader = 'assets/json/preloader.json';
+
+// SCREENS
+// 1 board
+String skip = 'Skip';
+String shareFeelings = 'Share Your Game\nFeelings';
+String pickEmtion =
+    'Pick your emotion after the match, tell others how you felt, and join the conversation';
+String next = 'Next';
+
+// 2 board
+String start = 'Start';
+String relive = 'Relive Every\nMoment';
+String checkMatch =
+    'Check match stats, read comments, and dive deeper into the action with the community';
+
+// guide
+String communityGuidelines = 'Community Guidelines';
+String letsKeep = 'Let’s keep comments friendly and fair:';
+List<String> guideList = [
+  'Be respectful — no hate, harassment, or personal attacks.',
+  'No spam or misleading comments.',
+  'Keep it clean — no offensive or violent language.',
+  'Share honest thoughts and respect other opinions.',
+  'Don’t pretend to be someone else or spread false info.'
+];
+String moderation = 'Moderation';
+String iAgree = 'I agree to the community guidelines';
+String acceptContinue = 'Accept & Continue';
+String byContinuing =
+    'By continuing, you agree to follow these rules and help us maintain a safe environment for all fans.';
+String weReview =
+    'We review comments and remove those that break the rules. Repeated violations may limit your account.';
+
+// HOME
+String matches = 'Matches';
+String history = 'History';
+String achievement = 'Achievement';
+String profile = 'Profile';

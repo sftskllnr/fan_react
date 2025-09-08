@@ -25,9 +25,8 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: ACCENT_PRIMARY),
-        useMaterial3: true,
-      ),
+          colorScheme: ColorScheme.fromSeed(seedColor: ACCENT_PRIMARY),
+          useMaterial3: true),
       home: const PreloadScreen(),
     );
   }
