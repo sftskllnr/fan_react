@@ -14,6 +14,7 @@ Color G_400 = const Color(0xffECEDF0);
 Color G_300 = const Color(0xffEAEAEA);
 Color G_200 = const Color(0xffF6F6F6);
 Color G_100 = const Color(0xffFfFfFf);
+Color HINT_COLOR = const Color(0x00000059);
 
 Color SYSTEM_ONE = const Color(0xffFF3B30);
 Color SYSTEM_TWO = const Color(0xff007AFF);

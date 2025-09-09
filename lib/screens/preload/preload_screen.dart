@@ -58,12 +58,18 @@ class _PreloadScreen extends State<PreloadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.sizeOf(context).width;
+    double screenHeight = MediaQuery.sizeOf(context).height;
+
     return Container(
       decoration: BoxDecoration(color: BACKGROUND),
       child: Stack(
         alignment: Alignment.topCenter,
         children: [
-          SvgPicture.asset(preloaderBack),
+          SizedBox(
+              width: screenWidth,
+              height: screenHeight,
+              child: SvgPicture.asset(preloaderBack, fit: BoxFit.fitWidth)),
           Center(
               child: Container(
                   width: 125,

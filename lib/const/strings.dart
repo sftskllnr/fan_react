@@ -88,7 +88,11 @@ String weReview =
     'We review comments and remove those that break the rules. Repeated violations may limit your account.';
 
 // HOME
+String ok = 'OK';
 String matches = 'Matches';
 String history = 'History';
 String achievement = 'Achievement';
 String profile = 'Profile';
+String reactToMatches = 'React to matches!';
+String selectReaction =
+    'Select a reaction under the match to express your mood. Your reaction will be added to the match statistics and can be changed at any time.';

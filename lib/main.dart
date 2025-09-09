@@ -3,6 +3,7 @@ import 'package:fan_react/screens/preload/preload_screen.dart';
 import 'package:fan_react/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -24,6 +25,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [FlutterSmartDialog.observer],
+      builder: FlutterSmartDialog.init(),
       theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: ACCENT_PRIMARY),
           useMaterial3: true),
