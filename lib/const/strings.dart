@@ -32,11 +32,12 @@ String chatConversation = 'assets/svg/chat_conversation.svg';
 String moreHorizontal = 'assets/svg/more_horizontal.svg';
 String trash = 'assets/svg/trash.svg';
 String chatClose = 'assets/svg/chat_close.svg';
-String cool = 'assets/svg/cool.svg';
-String angry = 'assets/svg/angry.svg';
-String disappointed = 'assets/svg/disappointed.svg';
-String shocked = 'assets/svg/shocked.svg';
-String loved = 'assets/svg/loved.svg';
+//
+String cool = 'assets/png/cool.png';
+String angry = 'assets/png/angry.png';
+String disappointed = 'assets/png/dissapointed.png';
+String shocked = 'assets/png/shocked.png';
+String loved = 'assets/png/loved.png';
 String commentVeteran = 'assets/svg/comment_veteran.svg';
 String threeDayStreak = 'assets/svg/three_day_streak.svg';
 String reactionMaster = 'assets/svg/reaction_master.svg';

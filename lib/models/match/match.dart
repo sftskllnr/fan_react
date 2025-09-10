@@ -56,3 +56,8 @@ class Match {
   factory Match.fromJson(String source) =>
       Match.fromMap(json.decode(source) as Map<String, dynamic>);
 }
+
+Future<List<Match>> parseMatches(String resp) async {
+  final parsed = (jsonDecode(resp) as List).cast<Map<String, dynamic>>();
+  return parsed.map<Match>((json) => Match.fromMap(json)).toList();
+}

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 class Score {
   final String? current;
-  final bool? penalties;
+  final String? penalties;
 
   Score({required this.current, required this.penalties});
 
@@ -16,7 +16,7 @@ class Score {
   factory Score.fromMap(Map<String, dynamic> map) {
     return Score(
       current: map['current'] != null ? map['current'] as String : null,
-      penalties: map['penalties'] != null ? map['penalties'] as bool : null,
+      penalties: map['penalties'] != null ? map['penalties'] as String : null,
     );
   }
 

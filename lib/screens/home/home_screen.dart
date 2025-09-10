@@ -167,7 +167,7 @@ class _HomeScreen extends State<HomeScreen> {
                   index: selectedIndexGlobal.value, children: _listWidgets),
             ),
             bottomNavigationBar: SizedBox(
-              height: 100,
+              height: navBatHeight,
               child: BottomNavBar(
                   curentIndex: selectedIndexGlobal.value,
                   onTap: (index) => selectedIndexGlobal.value = index,
