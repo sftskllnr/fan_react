@@ -97,3 +97,10 @@ String profile = 'Profile';
 String reactToMatches = 'React to matches!';
 String selectReaction =
     'Select a reaction under the match to express your mood. Your reaction will be added to the match statistics and can be changed at any time.';
+String filterLeague = 'Filter by League';
+String choice = 'Choice:';
+String all = 'All';
+String searhLeague = 'Search League';
+String searchBy = 'Search by full league name';
+String toFind = 'To find a league, enter its full name';
+String resetChoice = 'Reset choice';

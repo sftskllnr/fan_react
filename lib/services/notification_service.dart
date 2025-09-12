@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:app_settings/app_settings.dart';
 import 'package:fan_react/main.dart';
 import 'package:fan_react/screens/home/home_screen.dart';
+import 'package:fan_react/singleton/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -128,12 +129,12 @@ class NotificationService {
   }
 
   Future<void> _savePermissionStatus() async {
-    final prefs = await SharedPreferences.getInstance();
+    var prefs = await SharedPrefsSingleton.getInstance();
     await prefs.setBool('hasCheckedNotificationPermission', true);
   }
 
   Future<bool> _loadPermissionStatus() async {
-    final prefs = await SharedPreferences.getInstance();
+    var prefs = await SharedPrefsSingleton.getInstance();
     return prefs.getBool('hasCheckedNotificationPermission') ?? false;
   }
 
@@ -162,7 +163,7 @@ class NotificationService {
 
   // Schedule notification for inactive users (more than 3 days)
   Future<void> _scheduleInactiveNotification() async {
-    final prefs = await SharedPreferences.getInstance();
+    var prefs = await SharedPrefsSingleton.getInstance();
     final lastLogin = prefs.getInt('lastLoginTime') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;
     const threeDaysInMillis = 3 * 24 * 60 * 60 * 1000;
@@ -224,7 +225,7 @@ class NotificationService {
 
   // Update last login time
   Future<void> updateLastLoginTime() async {
-    final prefs = await SharedPreferences.getInstance();
+    var prefs = await SharedPrefsSingleton.getInstance();
     await prefs.setInt('lastLoginTime', DateTime.now().millisecondsSinceEpoch);
     await _scheduleInactiveNotification();
   }

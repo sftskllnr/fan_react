@@ -1,17 +1,20 @@
+import 'dart:async';
+import 'package:fan_react/api/api_client.dart';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
+import 'package:fan_react/models/league/league_season.dart';
 import 'package:fan_react/screens/achievement/achievement.dart';
 import 'package:fan_react/screens/history/history.dart';
 import 'package:fan_react/screens/home/bottom_nav_bar/bottom_nav_bar.dart';
 import 'package:fan_react/screens/home/bottom_nav_bar/bottom_nav_bar_item.dart';
 import 'package:fan_react/screens/matches/matches.dart';
 import 'package:fan_react/screens/profile/profile.dart';
+import 'package:fan_react/singleton/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 //guide dialog
 late BuildContext _aContext;
@@ -28,44 +31,86 @@ class HomeScreen extends StatefulWidget {
 final ValueNotifier selectedIndexGlobal = ValueNotifier(0);
 
 class _HomeScreen extends State<HomeScreen> {
-  List<Widget> _listWidgets = [];
-  bool? _isFirstLaunch;
+  late ApiClient _apiClient;
+  late PanelController _panelController;
+  late List<Widget> _listWidgets;
+  late TextEditingController _searchController;
+
   double topPadding = 150;
+  List<LeagueSeason> leaguesList = List<LeagueSeason>.empty(growable: true);
+  int selectedLeagueId = 0;
+  String selectedLeagueName = '';
+  List<LeagueSeason> _filteredLeagues =
+      List<LeagueSeason>.empty(growable: true);
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
+    _apiClient = ApiClient();
+    _panelController = PanelController();
+    _searchController = TextEditingController();
 
     _listWidgets = [
-      const Matches(),
+      Matches(showHidePanel: showHidePanel),
       const History(),
       const Achievement(),
       const Profile()
     ];
-
+    _getAllLeagues();
     _getIsFirstLaunch();
+
+    _filteredLeagues = leaguesList;
+
+    _searchController.addListener(() {
+      if (_debounce?.isActive ?? false) _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 500), _filterLeagues);
+    });
+  }
+
+  void _filterLeagues() {
+    final query = _searchController.text.toLowerCase();
+    _filteredLeagues = leaguesList
+        .where((league) => league.name.toLowerCase().contains(query))
+        .toList();
+    setState(() {});
+  }
+
+  void showHidePanel() {
+    _panelController.isPanelOpen
+        ? _panelController.close()
+        : _panelController.open();
   }
 
   Future<void> _getIsFirstLaunch() async {
-    final prefs = await SharedPreferences.getInstance();
+    var prefs = await SharedPrefsSingleton.getInstance();
     bool? isFirstLaunch = prefs.getBool('isFirstLaunch');
-
-    if (isFirstLaunch != null) {
-      _show(); // delete before release
-      setState(() {
-        _isFirstLaunch == false;
-      });
-    } else {
-      await prefs.setBool('isFirstLaunch', false);
-      // _show(); // uncomment before release
-      setState(() {
-        _isFirstLaunch == true;
-      });
+    if (isFirstLaunch == null) {
+      _show();
     }
   }
 
-  void showGuide() {
-    _show();
+  Future<void> _getAllLeagues() async {
+    List<LeagueSeason> leagues = await _apiClient.getAllLeagues();
+    setState(() {
+      leaguesList.addAll(leagues);
+      _filteredLeagues = leaguesList;
+    });
+  }
+
+  void setLeagueId(LeagueSeason league) {
+    setState(() {
+      selectedLeagueId = league.id;
+      selectedLeagueName = league.name;
+    });
+  }
+
+  void clearChoice() {
+    setState(() {
+      selectedLeagueId = 0;
+      selectedLeagueName = '';
+      _searchController.clear();
+    });
   }
 
   void _show() async {
@@ -80,6 +125,13 @@ class _HomeScreen extends State<HomeScreen> {
       );
     });
     await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Widget _pointA() {
@@ -150,49 +202,211 @@ class _HomeScreen extends State<HomeScreen> {
             ]));
   }
 
+  Widget leagueInput() {
+    return Column(
+      children: [
+        Container(
+          padding:
+              const EdgeInsets.fromLTRB(padding, padding / 2, padding, padding),
+          decoration:
+              BoxDecoration(border: Border(bottom: BorderSide(color: G_400))),
+          child: TextField(
+            controller: _searchController,
+            onTap: () => _searchController.text.isEmpty
+                ? _filteredLeagues.clear()
+                : null,
+            decoration: InputDecoration(
+                prefixIcon: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: padding),
+                    child: SvgPicture.asset(search,
+                        colorFilter: ColorFilter.mode(G_900, BlendMode.srcIn))),
+                hintText: searhLeague,
+                hintStyle: size15medium.copyWith(color: G_600),
+                contentPadding: const EdgeInsets.all(padding),
+                fillColor: G_200,
+                filled: true,
+                enabledBorder:
+                    OutlineInputBorder(borderSide: BorderSide(color: G_400)),
+                focusedBorder:
+                    OutlineInputBorder(borderSide: BorderSide(color: G_400))),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget leagueItem(LeagueSeason league, bool isWorld, double width) {
+    bool isSelected = league.id == selectedLeagueId;
+    return Container(
+      padding: const EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+          color: G_100, borderRadius: BorderRadius.circular(buttonsRadius)),
+      child: Row(
+        children: [
+          SizedBox(
+              height: 30,
+              width: 50,
+              child: isWorld
+                  ? Image.network(league.country.logo,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.error_outline_outlined))
+                  : SvgPicture.network(league.country.logo,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, item, stack) =>
+                          const Icon(Icons.error_outline_outlined))),
+          const SizedBox(width: padding * 0.8),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(
+                width: width, child: Text(league.name, style: size15semibold)),
+            Text(league.country.name,
+                style: size14medium.copyWith(color: G_600))
+          ]),
+          InkWell(
+              onTap: () => setLeagueId(league),
+              child: isSelected
+                  ? Icon(Icons.radio_button_checked_outlined,
+                      color: ACCENT_PRIMARY)
+                  : Icon(Icons.radio_button_off_outlined, color: G_700))
+        ],
+      ),
+    );
+  }
+
+  Widget _leaguesPanel(
+      ScrollController sc, double maxPanelHeight, double width) {
+    double listHeight =
+        maxPanelHeight - 4 - padding * 7 - padding - 1 - padding * 7;
+
+    return InkWell(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        children: [
+          Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: G_600,
+                  borderRadius: BorderRadius.circular(buttonsRadius))),
+          SizedBox(
+              height: padding * 1.5,
+              child: Text(filterLeague, style: size18semibold)),
+          SizedBox(
+              height: padding * 1.5,
+              child: Text(
+                  '$choice ${selectedLeagueName == '' ? all : selectedLeagueName}',
+                  style: size15semibold.copyWith(color: G_700))),
+          leagueInput(),
+          _searchController.text.isEmpty
+              ? Container(
+                  height: listHeight,
+                  width: Size.infinite.width,
+                  color: G_200,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(searchBy, style: size15semibold),
+                      Text(toFind, style: size14medium.copyWith(color: G_700)),
+                    ],
+                  ),
+                )
+              : Container(
+                  height: listHeight,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: padding, vertical: padding),
+                  decoration: BoxDecoration(color: G_200),
+                  child: ListView.builder(
+                      controller: sc,
+                      padding: const EdgeInsets.all(0.0),
+                      itemCount: _filteredLeagues.length,
+                      itemBuilder: (context, index) {
+                        bool isWorld =
+                            _filteredLeagues[index].country.name == 'World';
+                        return Padding(
+                            padding: const EdgeInsets.only(bottom: padding / 2),
+                            child: leagueItem(
+                                _filteredLeagues[index], isWorld, width));
+                      }),
+                ),
+          Container(
+            padding: const EdgeInsets.all(padding),
+            decoration: BoxDecoration(
+                color: G_100, border: Border(top: BorderSide(color: G_400))),
+            child: InkWell(
+              onTap: () => clearChoice(),
+              child: Container(
+                height: padding * 4,
+                width: Size.infinite.width,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                    color: selectedLeagueName == '' ? G_600 : ACCENT_PRIMARY,
+                    borderRadius: BorderRadius.circular(buttonsRadius)),
+                child: Text(resetChoice,
+                    style: size15semibold.copyWith(color: G_100)),
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    var now = DateTime.now();
-    DateFormat dateFormatBack = DateFormat('yyyy-MM-dd');
-    debugPrint(dateFormatBack.format(now));
+    double minPanelHeight = 0.0;
+    double maxPanelHeight = MediaQuery.sizeOf(context).height * 0.875;
+    double screenWidth = MediaQuery.sizeOf(context).width;
 
     return ValueListenableBuilder(
         valueListenable: selectedIndexGlobal,
         builder: (context, value, child) {
-          return Scaffold(
-            backgroundColor: G_200,
+          return SlidingUpPanel(
+            backdropEnabled: true,
+            color: G_100,
+            minHeight: minPanelHeight,
+            maxHeight: maxPanelHeight,
+            controller: _panelController,
+            borderRadius: BorderRadius.circular(buttonsRadius),
+            padding:
+                const EdgeInsetsDirectional.symmetric(vertical: padding / 2),
+            panelBuilder: (sc) => _leaguesPanel(sc, maxPanelHeight,
+                screenWidth - padding * 6 - padding / 2 - padding * 3),
             body: InkWell(
-              onTap: () => showGuide(),
-              child: IndexedStack(
-                  index: selectedIndexGlobal.value, children: _listWidgets),
-            ),
-            bottomNavigationBar: SizedBox(
-              height: navBatHeight,
-              child: BottomNavBar(
-                  curentIndex: selectedIndexGlobal.value,
-                  onTap: (index) => selectedIndexGlobal.value = index,
-                  children: [
-                    BottomNavBarItem(
-                        title: matches,
-                        svgIcon: selectedIndexGlobal.value == 0
-                            ? SvgPicture.asset(matchesActive)
-                            : SvgPicture.asset(matchesDefault)),
-                    BottomNavBarItem(
-                        title: history,
-                        svgIcon: selectedIndexGlobal.value == 1
-                            ? SvgPicture.asset(historyActive)
-                            : SvgPicture.asset(historyDefault)),
-                    BottomNavBarItem(
-                        title: achievement,
-                        svgIcon: selectedIndexGlobal.value == 2
-                            ? SvgPicture.asset(missionsActive)
-                            : SvgPicture.asset(missionsDefault)),
-                    BottomNavBarItem(
-                        title: profile,
-                        svgIcon: selectedIndexGlobal.value == 3
-                            ? SvgPicture.asset(profileActive)
-                            : SvgPicture.asset(profileDefault)),
-                  ]),
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: Scaffold(
+                backgroundColor: G_200,
+                resizeToAvoidBottomInset: false,
+                body: IndexedStack(
+                    index: selectedIndexGlobal.value, children: _listWidgets),
+                bottomNavigationBar: SizedBox(
+                  height: navBatHeight,
+                  child: BottomNavBar(
+                      curentIndex: selectedIndexGlobal.value,
+                      onTap: (index) => selectedIndexGlobal.value = index,
+                      children: [
+                        BottomNavBarItem(
+                            title: matches,
+                            svgIcon: selectedIndexGlobal.value == 0
+                                ? SvgPicture.asset(matchesActive)
+                                : SvgPicture.asset(matchesDefault)),
+                        BottomNavBarItem(
+                            title: history,
+                            svgIcon: selectedIndexGlobal.value == 1
+                                ? SvgPicture.asset(historyActive)
+                                : SvgPicture.asset(historyDefault)),
+                        BottomNavBarItem(
+                            title: achievement,
+                            svgIcon: selectedIndexGlobal.value == 2
+                                ? SvgPicture.asset(missionsActive)
+                                : SvgPicture.asset(missionsDefault)),
+                        BottomNavBarItem(
+                            title: profile,
+                            svgIcon: selectedIndexGlobal.value == 3
+                                ? SvgPicture.asset(profileActive)
+                                : SvgPicture.asset(profileDefault)),
+                      ]),
+                ),
+              ),
             ),
           );
         });

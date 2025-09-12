@@ -2,10 +2,10 @@ import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
 import 'package:fan_react/screens/home/home_screen.dart';
 import 'package:fan_react/screens/onboarding/first_onboarding.dart';
+import 'package:fan_react/singleton/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:lottie/lottie.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class PreloadScreen extends StatefulWidget {
   const PreloadScreen({super.key});
@@ -15,21 +15,23 @@ class PreloadScreen extends StatefulWidget {
 }
 
 class _PreloadScreen extends State<PreloadScreen> {
-  bool? _isFirstLaunch;
-
   @override
   void initState() {
-    _getIsFirstLaunch();
-    startAnimation();
     super.initState();
+    startAnimation();
   }
 
   void startAnimation() async {
+    var prefs = await SharedPrefsSingleton.getInstance();
+    bool? isFirstLaunch = prefs.getBool('isFirstLaunch');
+
+    await prefs.setBool('isFirstLaunch', false);
+
     Future.delayed(
         const Duration(seconds: 3),
         () => mounted
             // change before release
-            ? _isFirstLaunch == null
+            ? isFirstLaunch == null
                 ? Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(
                         builder: (context) => const FirstOnboarding()),
@@ -38,22 +40,6 @@ class _PreloadScreen extends State<PreloadScreen> {
                     MaterialPageRoute(builder: (context) => const HomeScreen()),
                     (Route<dynamic> route) => false)
             : null);
-  }
-
-  Future<void> _getIsFirstLaunch() async {
-    final prefs = await SharedPreferences.getInstance();
-    bool? isFirstLaunch = prefs.getBool('isFirstLaunch');
-
-    if (isFirstLaunch != null) {
-      setState(() {
-        _isFirstLaunch == false;
-      });
-    } else {
-      setState(() {
-        _isFirstLaunch == true;
-      });
-      await prefs.setBool('isFirstLaunch', false);
-    }
   }
 
   @override
