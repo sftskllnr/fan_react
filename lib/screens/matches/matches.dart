@@ -2,6 +2,8 @@ import 'package:fan_react/api/api_client.dart';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
+import 'package:fan_react/models/match/match_by_id.dart';
+import 'package:fan_react/screens/home/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:flutter_svg/svg.dart';
@@ -35,7 +37,7 @@ class _MatchesState extends State<Matches> {
 
   void getMatchById(int id) async {
     FocusScope.of(context).unfocus();
-    var matchById = await _apiClient.getMatchById(id);
+    MatchById? matchById = await _apiClient.getMatchById(id);
   }
 
   Widget matchItem(Match match, Function(int) onTap) {
@@ -210,13 +212,18 @@ class _MatchesState extends State<Matches> {
         centerTitle: false,
         title: Text(matches, style: size24bold),
         actions: [
-          InkWell(
-            onTap: widget.showHidePanel,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: padding),
-              child: SvgPicture.asset(filterDefault),
-            ),
-          )
+          ValueListenableBuilder(
+              valueListenable: isLeagueSelected,
+              builder: (context, isSelected, child) {
+                return InkWell(
+                    onTap: widget.showHidePanel,
+                    child: Padding(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: padding),
+                        child: isSelected
+                            ? SvgPicture.asset(filterActive)
+                            : SvgPicture.asset(filterDefault)));
+              })
         ]);
 
     return Scaffold(

@@ -29,12 +29,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 final ValueNotifier selectedIndexGlobal = ValueNotifier(0);
+final ValueNotifier isLeagueSelected = ValueNotifier(false);
 
 class _HomeScreen extends State<HomeScreen> {
   late ApiClient _apiClient;
   late PanelController _panelController;
   late List<Widget> _listWidgets;
   late TextEditingController _searchController;
+  late ScrollController _scrollController;
 
   double topPadding = 150;
   List<LeagueSeason> leaguesList = List<LeagueSeason>.empty(growable: true);
@@ -43,6 +45,7 @@ class _HomeScreen extends State<HomeScreen> {
   List<LeagueSeason> _filteredLeagues =
       List<LeagueSeason>.empty(growable: true);
   Timer? _debounce;
+  int? _selectedLeagueIndex;
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _HomeScreen extends State<HomeScreen> {
     _apiClient = ApiClient();
     _panelController = PanelController();
     _searchController = TextEditingController();
+    _scrollController = ScrollController();
 
     _listWidgets = [
       Matches(showHidePanel: showHidePanel),
@@ -60,8 +64,6 @@ class _HomeScreen extends State<HomeScreen> {
     _getAllLeagues();
     _getIsFirstLaunch();
 
-    _filteredLeagues = leaguesList;
-
     _searchController.addListener(() {
       if (_debounce?.isActive ?? false) _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: 500), _filterLeagues);
@@ -70,16 +72,35 @@ class _HomeScreen extends State<HomeScreen> {
 
   void _filterLeagues() {
     final query = _searchController.text.toLowerCase();
-    _filteredLeagues = leaguesList
-        .where((league) => league.name.toLowerCase().contains(query))
-        .toList();
-    setState(() {});
+    setState(() {
+      if (query.isEmpty) {
+        _filteredLeagues = List<LeagueSeason>.from(leaguesList);
+      } else {
+        _filteredLeagues = leaguesList
+            .where((league) => league.name.toLowerCase().contains(query))
+            .toList();
+      }
+      if (selectedLeagueId != 0) {
+        _selectedLeagueIndex = _filteredLeagues
+            .indexWhere((league) => league.id == selectedLeagueId);
+      } else {
+        _selectedLeagueIndex = null;
+      }
+    });
   }
 
   void showHidePanel() {
-    _panelController.isPanelOpen
-        ? _panelController.close()
-        : _panelController.open();
+    if (_panelController.isPanelOpen) {
+      _panelController.close();
+    } else {
+      _panelController.open();
+
+      if (_selectedLeagueIndex != null && _selectedLeagueIndex! >= 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToSelectedLeague(_scrollController);
+        });
+      }
+    }
   }
 
   Future<void> _getIsFirstLaunch() async {
@@ -93,15 +114,30 @@ class _HomeScreen extends State<HomeScreen> {
   Future<void> _getAllLeagues() async {
     List<LeagueSeason> leagues = await _apiClient.getAllLeagues();
     setState(() {
+      leaguesList.clear();
       leaguesList.addAll(leagues);
-      _filteredLeagues = leaguesList;
+      _filteredLeagues = List<LeagueSeason>.from(leaguesList);
+
+      if (selectedLeagueId != 0) {
+        _selectedLeagueIndex =
+            leaguesList.indexWhere((league) => league.id == selectedLeagueId);
+      }
     });
   }
 
   void setLeagueId(LeagueSeason league) {
     setState(() {
+      isLeagueSelected.value = true;
       selectedLeagueId = league.id;
       selectedLeagueName = league.name;
+
+      _selectedLeagueIndex =
+          (_searchController.text.isEmpty ? leaguesList : _filteredLeagues)
+              .indexWhere((l) => l.id == league.id);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedLeague(_scrollController);
+      });
     });
   }
 
@@ -109,8 +145,23 @@ class _HomeScreen extends State<HomeScreen> {
     setState(() {
       selectedLeagueId = 0;
       selectedLeagueName = '';
+      isLeagueSelected.value = false;
       _searchController.clear();
+      _filteredLeagues = List<LeagueSeason>.from(leaguesList);
+      _selectedLeagueIndex = null;
     });
+  }
+
+  void _scrollToSelectedLeague(ScrollController sc) {
+    if (_selectedLeagueIndex != null && _selectedLeagueIndex! >= 0) {
+      const double itemHeight = 60.0;
+      final double offset = _selectedLeagueIndex! * (itemHeight + padding);
+      sc.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _show() async {
@@ -235,7 +286,8 @@ class _HomeScreen extends State<HomeScreen> {
     );
   }
 
-  Widget leagueItem(LeagueSeason league, bool isWorld, double width) {
+  Widget leagueItem(
+      LeagueSeason league, bool isWorld, double width, ScrollController sc) {
     bool isSelected = league.id == selectedLeagueId;
     return Container(
       padding: const EdgeInsets.all(padding),
@@ -300,34 +352,48 @@ class _HomeScreen extends State<HomeScreen> {
           _searchController.text.isEmpty
               ? Container(
                   height: listHeight,
-                  width: Size.infinite.width,
-                  color: G_200,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(searchBy, style: size15semibold),
-                      Text(toFind, style: size14medium.copyWith(color: G_700)),
-                    ],
-                  ),
-                )
-              : Container(
-                  height: listHeight,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: padding, vertical: padding),
+                  padding: const EdgeInsets.symmetric(horizontal: padding),
                   decoration: BoxDecoration(color: G_200),
                   child: ListView.builder(
                       controller: sc,
                       padding: const EdgeInsets.all(0.0),
-                      itemCount: _filteredLeagues.length,
+                      itemCount: leaguesList.length,
                       itemBuilder: (context, index) {
                         bool isWorld =
-                            _filteredLeagues[index].country.name == 'World';
+                            leaguesList[index].country.name == 'World';
                         return Padding(
-                            padding: const EdgeInsets.only(bottom: padding / 2),
+                            padding: const EdgeInsets.only(top: padding),
                             child: leagueItem(
-                                _filteredLeagues[index], isWorld, width));
-                      }),
-                ),
+                                leaguesList[index], isWorld, width, sc));
+                      }))
+              : _filteredLeagues.isEmpty
+                  ? Container(
+                      height: listHeight,
+                      width: Size.infinite.width,
+                      color: G_200,
+                      child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(searchBy, style: size15semibold),
+                            Text(toFind,
+                                style: size14medium.copyWith(color: G_700))
+                          ]))
+                  : Container(
+                      height: listHeight,
+                      padding: const EdgeInsets.symmetric(horizontal: padding),
+                      decoration: BoxDecoration(color: G_200),
+                      child: ListView.builder(
+                          controller: sc,
+                          padding: const EdgeInsets.all(0.0),
+                          itemCount: _filteredLeagues.length,
+                          itemBuilder: (context, index) {
+                            bool isWorld =
+                                _filteredLeagues[index].country.name == 'World';
+                            return Padding(
+                                padding: const EdgeInsets.only(top: padding),
+                                child: leagueItem(_filteredLeagues[index],
+                                    isWorld, width, sc));
+                          })),
           Container(
             padding: const EdgeInsets.all(padding),
             decoration: BoxDecoration(
@@ -369,7 +435,7 @@ class _HomeScreen extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(buttonsRadius),
             padding:
                 const EdgeInsetsDirectional.symmetric(vertical: padding / 2),
-            panelBuilder: (sc) => _leaguesPanel(sc, maxPanelHeight,
+            panel: _leaguesPanel(_scrollController, maxPanelHeight,
                 screenWidth - padding * 6 - padding / 2 - padding * 3),
             body: InkWell(
               onTap: () => FocusScope.of(context).unfocus(),
