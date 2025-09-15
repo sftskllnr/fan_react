@@ -104,3 +104,14 @@ String searhLeague = 'Search League';
 String searchBy = 'Search by full league name';
 String toFind = 'To find a league, enter its full name';
 String resetChoice = 'Reset choice';
+String noResultFound = 'No results found';
+String resetToSee = 'Reset filter to see all matches';
+String loading = 'Loading...';
+
+// DETAILS MATCH
+String detailsMatch = 'Details Match';
+String statistics = 'Statistics';
+String h2h = 'H2H';
+String comments = 'Comments';
+String matchVibes = 'Match Vibes';
+String gameStatistics = 'Game Statistics';

@@ -30,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 
 final ValueNotifier selectedIndexGlobal = ValueNotifier(0);
 final ValueNotifier isLeagueSelected = ValueNotifier(false);
+final ValueNotifier selectedLeagueId = ValueNotifier(0);
 
 class _HomeScreen extends State<HomeScreen> {
   late ApiClient _apiClient;
@@ -40,7 +41,6 @@ class _HomeScreen extends State<HomeScreen> {
 
   double topPadding = 150;
   List<LeagueSeason> leaguesList = List<LeagueSeason>.empty(growable: true);
-  int selectedLeagueId = 0;
   String selectedLeagueName = '';
   List<LeagueSeason> _filteredLeagues =
       List<LeagueSeason>.empty(growable: true);
@@ -80,9 +80,9 @@ class _HomeScreen extends State<HomeScreen> {
             .where((league) => league.name.toLowerCase().contains(query))
             .toList();
       }
-      if (selectedLeagueId != 0) {
+      if (selectedLeagueId.value != 0) {
         _selectedLeagueIndex = _filteredLeagues
-            .indexWhere((league) => league.id == selectedLeagueId);
+            .indexWhere((league) => league.id == selectedLeagueId.value);
       } else {
         _selectedLeagueIndex = null;
       }
@@ -118,9 +118,9 @@ class _HomeScreen extends State<HomeScreen> {
       leaguesList.addAll(leagues);
       _filteredLeagues = List<LeagueSeason>.from(leaguesList);
 
-      if (selectedLeagueId != 0) {
-        _selectedLeagueIndex =
-            leaguesList.indexWhere((league) => league.id == selectedLeagueId);
+      if (selectedLeagueId.value != 0) {
+        _selectedLeagueIndex = leaguesList
+            .indexWhere((league) => league.id == selectedLeagueId.value);
       }
     });
   }
@@ -128,7 +128,7 @@ class _HomeScreen extends State<HomeScreen> {
   void setLeagueId(LeagueSeason league) {
     setState(() {
       isLeagueSelected.value = true;
-      selectedLeagueId = league.id;
+      selectedLeagueId.value = league.id;
       selectedLeagueName = league.name;
 
       _selectedLeagueIndex =
@@ -143,7 +143,7 @@ class _HomeScreen extends State<HomeScreen> {
 
   void clearChoice() {
     setState(() {
-      selectedLeagueId = 0;
+      selectedLeagueId.value = 0;
       selectedLeagueName = '';
       isLeagueSelected.value = false;
       _searchController.clear();
@@ -266,11 +266,15 @@ class _HomeScreen extends State<HomeScreen> {
             onTap: () => _searchController.text.isEmpty
                 ? _filteredLeagues.clear()
                 : null,
+            cursorColor: ACCENT_PRIMARY,
             decoration: InputDecoration(
                 prefixIcon: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: padding),
                     child: SvgPicture.asset(search,
                         colorFilter: ColorFilter.mode(G_900, BlendMode.srcIn))),
+                suffixIcon: InkWell(
+                    onTap: () => _searchController.clear(),
+                    child: const Icon(Icons.cancel_rounded)),
                 hintText: searhLeague,
                 hintStyle: size15medium.copyWith(color: G_600),
                 contentPadding: const EdgeInsets.all(padding),
@@ -288,7 +292,7 @@ class _HomeScreen extends State<HomeScreen> {
 
   Widget leagueItem(
       LeagueSeason league, bool isWorld, double width, ScrollController sc) {
-    bool isSelected = league.id == selectedLeagueId;
+    bool isSelected = league.id == selectedLeagueId.value;
     return Container(
       padding: const EdgeInsets.all(padding),
       decoration: BoxDecoration(
@@ -399,7 +403,7 @@ class _HomeScreen extends State<HomeScreen> {
             decoration: BoxDecoration(
                 color: G_100, border: Border(top: BorderSide(color: G_400))),
             child: InkWell(
-              onTap: () => clearChoice(),
+              onTap: () => selectedLeagueName != '' ? clearChoice() : null,
               child: Container(
                 height: padding * 4,
                 width: Size.infinite.width,

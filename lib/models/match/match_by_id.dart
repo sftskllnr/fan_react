@@ -1,6 +1,5 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:convert';
-
 import 'package:fan_react/models/away_team.dart/away_team.dart';
 import 'package:fan_react/models/country/country.dart';
 import 'package:fan_react/models/event/event.dart';
@@ -28,7 +27,7 @@ class MatchById {
   final Referee referee;
   final Venue venue;
   final Forecast forecast;
-  final Predictions predictions;
+  final Predictions? predictions;
   final List<News> news;
 
   MatchById(
@@ -63,7 +62,7 @@ class MatchById {
       'referee': referee.toMap(),
       'venue': venue.toMap(),
       'forecast': forecast.toMap(),
-      'predictions': predictions.toMap(),
+      'predictions': predictions?.toMap(),
       'news': news.map((x) => x.toMap()).toList(),
     };
   }
@@ -91,8 +90,9 @@ class MatchById {
       referee: Referee.fromMap(map['referee'] as Map<String, dynamic>),
       venue: Venue.fromMap(map['venue'] as Map<String, dynamic>),
       forecast: Forecast.fromMap(map['forecast'] as Map<String, dynamic>),
-      predictions:
-          Predictions.fromMap(map['predictions'] as Map<String, dynamic>),
+      predictions: map['predictions'] != null
+          ? Predictions.fromMap(map['predictions'] as Map<String, dynamic>)
+          : null,
       news: List<News>.from(
         (map['news'] as List<dynamic>).map<News>(
           (x) => News.fromMap(x as Map<String, dynamic>),

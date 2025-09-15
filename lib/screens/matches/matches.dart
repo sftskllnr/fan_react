@@ -2,12 +2,13 @@ import 'package:fan_react/api/api_client.dart';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
-import 'package:fan_react/models/match/match_by_id.dart';
+import 'package:fan_react/screens/details/match_details_screen.dart';
 import 'package:fan_react/screens/home/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart';
 
 class Matches extends StatefulWidget {
   final void Function()? showHidePanel;
@@ -20,6 +21,9 @@ class Matches extends StatefulWidget {
 class _MatchesState extends State<Matches> {
   late ApiClient _apiClient;
   List<Match> allMatches = List<Match>.empty(growable: true);
+  List<Match> selectedLeagueMatches = List.empty(growable: true);
+  int? _lastFetchedLeagueId;
+  bool isLoading = false;
 
   @override
   void initState() {
@@ -28,21 +32,83 @@ class _MatchesState extends State<Matches> {
     getAllMatches();
   }
 
+  void getLeagueMatches(int leagueId) async {
+    if (leagueId == 0) {
+      // selectedLeagueMatches.clear();
+      // _lastFetchedLeagueId = null;
+      // isLoading = false;
+      // setState(() {});
+      return;
+    }
+    if (_lastFetchedLeagueId != leagueId) {
+      isLoading = true;
+
+      try {
+        List<Match> matches = await _apiClient.getLeagueMatches(leagueId);
+
+        selectedLeagueMatches.clear();
+        selectedLeagueMatches.addAll(matches);
+        _lastFetchedLeagueId = leagueId;
+        isLoading = false;
+        setState(() {});
+      } catch (e) {
+        selectedLeagueMatches.clear();
+        _lastFetchedLeagueId = null;
+        isLoading = false;
+        setState(() {});
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to load matches: $e')),
+          );
+        }
+      }
+    }
+  }
+
   void getAllMatches() async {
-    List<Match> matches = await _apiClient.getAllMatches();
-    setState(() {
-      allMatches.addAll(matches);
-    });
+    try {
+      List<Match> matches = await _apiClient.getAllMatches();
+      setState(() {
+        allMatches.clear();
+        allMatches.addAll(matches);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load matches: $e')),
+        );
+      }
+    }
   }
 
-  void getMatchById(int id) async {
+  void goToMatchDetails(Match match) async {
     FocusScope.of(context).unfocus();
-    MatchById? matchById = await _apiClient.getMatchById(id);
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (builder) => MatchDetailsScreen(match: match)));
   }
 
-  Widget matchItem(Match match, Function(int) onTap) {
+  Widget noResultsFound() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(noResultFound, style: size15semibold),
+        Text(resetToSee, style: size14medium.copyWith(color: G_700)),
+        const SizedBox(height: padding),
+        Container(
+          padding: const EdgeInsets.all(padding),
+          decoration: BoxDecoration(
+              color: ACCENT_PRIMARY,
+              borderRadius: BorderRadius.circular(buttonsRadius)),
+          child:
+              Text(resetChoice, style: size15semibold.copyWith(color: G_100)),
+        )
+      ],
+    );
+  }
+
+  Widget matchItem(Match match, void Function(Match) onTap) {
     return InkWell(
-      onTap: () => onTap(match.id),
+      onTap: () => onTap(match),
       child: Container(
         padding: const EdgeInsets.all(padding),
         decoration: BoxDecoration(
@@ -59,8 +125,13 @@ class _MatchesState extends State<Matches> {
                           width: 40,
                           height: 25,
                           child: match.country.name == 'World'
-                              ? Image.network(match.country.logo)
-                              : SvgPicture.network(match.country.logo)),
+                              ? Image.network(match.country.logo,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.error_outline_outlined))
+                              : SvgPicture.network(match.country.logo,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(
+                                          Icons.error_outline_outlined))),
                     ),
                   ],
                 ),
@@ -205,8 +276,7 @@ class _MatchesState extends State<Matches> {
     var yesterday = DateTime.now().subtract(const Duration(days: 1));
     String date = dateFormatBack.format(yesterday);
 
-    double screenWidth = MediaQuery.sizeOf(context).width;
-    double screenHeight = MediaQuery.sizeOf(context).height; // 890 A 850 I
+    double screenHeight = MediaQuery.sizeOf(context).height;
 
     AppBar appBar = AppBar(
         centerTitle: false,
@@ -226,38 +296,80 @@ class _MatchesState extends State<Matches> {
               })
         ]);
 
-    return Scaffold(
-      appBar: appBar,
-      resizeToAvoidBottomInset: false,
-      body: Container(
-        color: G_400,
-        padding: const EdgeInsets.symmetric(horizontal: padding / 2),
-        height: screenHeight -
-            appBar.preferredSize.height -
-            padding * 2 -
-            navBatHeight,
-        child: Column(
-          children: [
-            Container(
-                alignment: Alignment.center,
-                height: padding * 2,
-                child:
-                    Text(date, style: size14semibold.copyWith(color: G_700))),
-            SizedBox(
+    return InkWell(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        appBar: appBar,
+        resizeToAvoidBottomInset: false,
+        body: ValueListenableBuilder(
+          valueListenable: selectedLeagueId,
+          builder: (context, leagueId, child) {
+            getLeagueMatches(leagueId);
+            return Container(
+              color: G_400,
+              padding: const EdgeInsets.symmetric(horizontal: padding / 2),
               height: screenHeight -
                   appBar.preferredSize.height -
-                  padding * 6 -
+                  padding * 2 -
                   navBatHeight,
-              child: ListView.builder(
-                  itemCount: allMatches.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: padding / 4),
-                      child: matchItem(allMatches[index], getMatchById),
-                    );
-                  }),
-            ),
-          ],
+              child: Column(
+                children: [
+                  Container(
+                      alignment: Alignment.center,
+                      height: padding * 2,
+                      child: Text(date,
+                          style: size14semibold.copyWith(color: G_700))),
+                  SizedBox(
+                    height: screenHeight -
+                        appBar.preferredSize.height -
+                        padding * 6 -
+                        navBatHeight,
+                    child: ValueListenableBuilder(
+                      valueListenable: isLeagueSelected,
+                      builder: (context, isSelected, child) {
+                        return isLoading
+                            ? const Center(
+                                child: CircularProgressIndicator.adaptive())
+                            : isSelected
+                                ? selectedLeagueMatches.isEmpty
+                                    ? noResultsFound()
+                                    : ListView.builder(
+                                        itemCount: selectedLeagueMatches.length,
+                                        itemBuilder: (context, index) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: padding / 4),
+                                            child: matchItem(
+                                                selectedLeagueMatches[index],
+                                                goToMatchDetails),
+                                          );
+                                        })
+                                : allMatches.isEmpty
+                                    ? Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                            LottieBuilder.asset(preloader,
+                                                width: 100, height: 100),
+                                            Text(loading, style: size15semibold)
+                                          ])
+                                    : ListView.builder(
+                                        itemCount: allMatches.length,
+                                        itemBuilder: (context, index) {
+                                          return Padding(
+                                              padding: const EdgeInsets.only(
+                                                  bottom: padding / 4),
+                                              child: matchItem(
+                                                  allMatches[index],
+                                                  goToMatchDetails));
+                                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
