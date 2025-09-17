@@ -1,7 +1,7 @@
 // ASSETS
 // svg
 String sendDisabled = 'assets/svg/send_disabled.svg';
-String sendActive = 'assets/svg/send_active.svgs';
+String sendActive = 'assets/svg/send_active.svg';
 String profileActive = 'assets/svg/profile_active.svg';
 String profileDefault = 'assets/svg/profile_default.svg';
 String historyActive = 'assets/svg/history_active.svg';
@@ -30,7 +30,7 @@ String arrowLeftWhite = 'assets/svg/arrow_left_white.svg';
 String arrowLeftBlack = 'assets/svg/arrow_left_black.svg';
 String chatConversation = 'assets/svg/chat_conversation.svg';
 String moreHorizontal = 'assets/svg/more_horizontal.svg';
-String trash = 'assets/svg/trash.svg';
+String trash = 'assets/svg/trash_empty.svg';
 String chatClose = 'assets/svg/chat_close.svg';
 //
 String cool = 'assets/png/cool.png';
@@ -115,3 +115,11 @@ String h2h = 'H2H';
 String comments = 'Comments';
 String matchVibes = 'Match Vibes';
 String gameStatistics = 'Game Statistics';
+String noCommentsYet = 'No comments yet';
+String startConverstion = 'Start the conversation — add a comment';
+String whatDoYouThink = 'What do you think about the match?';
+String deleteCommentTitle = 'Delete your comment?';
+String thisAction = 'This action cannot be undone.';
+String cancel = 'Cancel';
+String delete = 'Delete';
+String penalties = 'Penalties';

@@ -3,6 +3,8 @@ import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
 import 'package:fan_react/screens/guide/default_button.dart';
 import 'package:fan_react/screens/home/home_screen.dart';
+import 'package:fan_react/services/firestore_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 
@@ -14,13 +16,26 @@ class GuideScreen extends StatefulWidget {
 }
 
 class _GuideScreenState extends State<GuideScreen> {
+  late FirestoreService firestoreService;
   bool? _isAgree = false;
 
-  void goToHomeScreen() {
+  @override
+  void initState() {
+    super.initState();
+    firestoreService = FirestoreService();
+  }
+
+  void goToHomeScreen() async {
     _isAgree ?? false
-        ? Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (builder) => const HomeScreen()),
-            (Route<dynamic> route) => false)
+        ? {
+            await FirebaseAuth.instance.signInAnonymously(),
+            firestoreService.createUserProfile(),
+            mounted
+                ? Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (builder) => const HomeScreen()),
+                    (Route<dynamic> route) => false)
+                : null
+          }
         : null;
   }
 

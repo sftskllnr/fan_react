@@ -4,6 +4,7 @@ import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
 import 'package:fan_react/screens/details/match_details_screen.dart';
 import 'package:fan_react/screens/home/home_screen.dart';
+import 'package:fan_react/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:flutter_svg/svg.dart';
@@ -20,32 +21,31 @@ class Matches extends StatefulWidget {
 
 class _MatchesState extends State<Matches> {
   late ApiClient _apiClient;
+  late FirestoreService _firestoreService;
   List<Match> allMatches = List<Match>.empty(growable: true);
   List<Match> selectedLeagueMatches = List.empty(growable: true);
   int? _lastFetchedLeagueId;
   bool isLoading = false;
 
+  final Map<int, Map<String, int>> _firestoreReactions = {};
+  final Map<int, String> _selectedReactions = {};
+
   @override
   void initState() {
     super.initState();
     _apiClient = ApiClient();
+    _firestoreService = FirestoreService();
     getAllMatches();
   }
 
   void getLeagueMatches(int leagueId) async {
     if (leagueId == 0) {
-      // selectedLeagueMatches.clear();
-      // _lastFetchedLeagueId = null;
-      // isLoading = false;
-      // setState(() {});
       return;
     }
     if (_lastFetchedLeagueId != leagueId) {
       isLoading = true;
-
       try {
         List<Match> matches = await _apiClient.getLeagueMatches(leagueId);
-
         selectedLeagueMatches.clear();
         selectedLeagueMatches.addAll(matches);
         _lastFetchedLeagueId = leagueId;
@@ -68,10 +68,14 @@ class _MatchesState extends State<Matches> {
   void getAllMatches() async {
     try {
       List<Match> matches = await _apiClient.getAllMatches();
-      setState(() {
-        allMatches.clear();
-        allMatches.addAll(matches);
-      });
+      allMatches.clear();
+      allMatches.addAll(matches);
+      for (var match in matches) {
+        if (!_firestoreReactions.containsKey(match.id)) {
+          await _firestoreService.initializeMatch(match.id);
+        }
+      }
+      setState(() {});
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -85,6 +89,49 @@ class _MatchesState extends State<Matches> {
     FocusScope.of(context).unfocus();
     Navigator.of(context).push(MaterialPageRoute(
         builder: (builder) => MatchDetailsScreen(match: match)));
+  }
+
+  Future<void> updateReaction(int matchId, String reactionType) async {
+    try {
+      // Initialize match in Firestore if not present
+      if (!_firestoreReactions.containsKey(matchId)) {
+        await _firestoreService.initializeMatch(matchId);
+        _firestoreReactions[matchId] = {
+          'cool': 0,
+          'angry': 0,
+          'disappointed': 0,
+          'shocked': 0,
+        };
+      }
+
+      // Ensure the map is accessible
+      final reactions = _firestoreReactions[matchId];
+      if (reactions == null) {
+        throw Exception('Reaction map is null for matchId: $matchId');
+      }
+
+      _selectedReactions[matchId] = reactionType;
+      reactions[reactionType] = (reactions[reactionType] ?? 0) + 1;
+      setState(() {});
+
+      await _firestoreService.updateReaction(matchId, reactionType);
+    } catch (e) {
+      setState(() {
+        _selectedReactions.remove(matchId);
+        final reactions = _firestoreReactions[matchId];
+        if (reactions != null) {
+          reactions[reactionType] = (reactions[reactionType] ?? 0) - 1;
+          if (reactions.values.every((count) => count == 0)) {
+            _firestoreReactions.remove(matchId);
+          }
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update reaction: $e')),
+        );
+      }
+    }
   }
 
   Widget noResultsFound() {
@@ -107,6 +154,15 @@ class _MatchesState extends State<Matches> {
   }
 
   Widget matchItem(Match match, void Function(Match) onTap) {
+    final selectedReaction = _selectedReactions[match.id];
+    // Use Firestore reactions, fallback to default if not available
+    final reactions = _firestoreReactions[match.id] ??
+        {
+          'cool': 0,
+          'angry': 0,
+          'disappointed': 0,
+          'shocked': 0,
+        };
     return InkWell(
       onTap: () => onTap(match),
       child: Container(
@@ -179,10 +235,11 @@ class _MatchesState extends State<Matches> {
               ],
             ),
             const SizedBox(height: padding / 2),
-            Row(
-              children: [
-                Container(
-                    width: 55,
+            Row(children: [
+              InkWell(
+                onTap: () => updateReaction(match.id, 'loved'),
+                child: Container(
+                    //width: 65,
                     padding: const EdgeInsets.all(padding / 4),
                     alignment: Alignment.centerLeft,
                     decoration: BoxDecoration(
@@ -190,80 +247,83 @@ class _MatchesState extends State<Matches> {
                     child: Row(
                       children: [
                         SizedBox(
-                            height: 25, width: 25, child: Image.asset(cool)),
-                        const Spacer(),
-                        Text('1', style: size15semibold),
-                        const SizedBox(width: padding / 2)
+                            height: 20, width: 20, child: Image.asset(loved)),
+                        const SizedBox(width: padding / 4),
+                        Text(match.reactions?['loved'].toString() ?? '',
+                            style: size12semibold),
                       ],
                     )),
-                SizedBox(width: padding / 4),
-                Container(
-                    width: 55,
-                    padding: const EdgeInsets.all(padding / 4),
-                    alignment: Alignment.centerLeft,
-                    decoration: BoxDecoration(
-                        color: G_400, borderRadius: BorderRadius.circular(50)),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                            height: 25, width: 25, child: Image.asset(angry)),
-                        const Spacer(),
-                        Text('1', style: size15semibold),
-                        const SizedBox(width: padding / 2)
-                      ],
-                    )),
-                SizedBox(width: padding / 4),
-                Container(
-                    width: 55,
-                    padding: const EdgeInsets.all(padding / 4),
-                    alignment: Alignment.centerLeft,
-                    decoration: BoxDecoration(
-                        color: G_400, borderRadius: BorderRadius.circular(50)),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                            height: 25,
-                            width: 25,
-                            child: Image.asset(disappointed)),
-                        const Spacer(),
-                        Text('1', style: size15semibold),
-                        const SizedBox(width: padding / 2)
-                      ],
-                    )),
-                SizedBox(width: padding / 4),
-                Container(
-                    width: 55,
-                    padding: const EdgeInsets.all(padding / 4),
-                    alignment: Alignment.centerLeft,
-                    decoration: BoxDecoration(
-                        color: G_400, borderRadius: BorderRadius.circular(50)),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                            height: 25, width: 25, child: Image.asset(cool)),
-                        const Spacer(),
-                        Text('1', style: size15semibold),
-                        const SizedBox(width: padding / 2)
-                      ],
-                    )),
-                SizedBox(width: padding / 4),
-                Container(
-                    width: 55,
-                    padding: const EdgeInsets.all(padding / 4),
-                    alignment: Alignment.centerLeft,
-                    decoration: BoxDecoration(
-                        color: G_400, borderRadius: BorderRadius.circular(50)),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                            height: 25, width: 25, child: Image.asset(shocked)),
-                        const Spacer(),
-                        Text('1', style: size15semibold),
-                        const SizedBox(width: padding / 2)
-                      ],
-                    )),
-              ],
-            )
+              ),
+              const SizedBox(width: padding / 4),
+              Container(
+                  //width: 65,
+                  padding: const EdgeInsets.all(padding / 4),
+                  alignment: Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                      color: G_400, borderRadius: BorderRadius.circular(50)),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: Image.asset(angry),
+                      ),
+                      const SizedBox(width: padding / 4),
+                      Text(match.reactions?['angry'].toString() ?? '',
+                          style: size12semibold),
+                    ],
+                  )),
+              const SizedBox(width: padding / 4),
+              Container(
+                  //width: 65,
+                  padding: const EdgeInsets.all(padding / 4),
+                  alignment: Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                      color: G_400, borderRadius: BorderRadius.circular(50)),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: Image.asset(disappointed),
+                      ),
+                      const SizedBox(width: padding / 4),
+                      Text(match.reactions?['disappointed'].toString() ?? '',
+                          style: size12semibold),
+                    ],
+                  )),
+              const SizedBox(width: padding / 4),
+              Container(
+                  //width: 65,
+                  padding: const EdgeInsets.all(padding / 4),
+                  alignment: Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                      color: G_400, borderRadius: BorderRadius.circular(50)),
+                  child: Row(
+                    children: [
+                      SizedBox(height: 20, width: 20, child: Image.asset(cool)),
+                      const SizedBox(width: padding / 4),
+                      Text(match.reactions?['cool'].toString() ?? '',
+                          style: size12semibold),
+                    ],
+                  )),
+              const SizedBox(width: padding / 4),
+              Container(
+                  padding: const EdgeInsets.all(padding / 4),
+                  alignment: Alignment.centerLeft,
+                  decoration: BoxDecoration(
+                      color: G_400, borderRadius: BorderRadius.circular(50)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      SizedBox(
+                          height: 20, width: 20, child: Image.asset(shocked)),
+                      const SizedBox(width: padding / 4),
+                      Text(match.reactions?['shocked'].toString() ?? '',
+                          style: size12semibold),
+                    ],
+                  )),
+            ])
           ],
         ),
       ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:fan_react/models/away_team.dart/away_team.dart';
 import 'package:fan_react/models/country/country.dart';
 import 'package:fan_react/models/home_team.dart/home_team.dart';
@@ -14,16 +15,24 @@ class Match {
   final HomeTeam homeTeam;
   final League league;
   final MatchState state;
+  final Map<String, int> reactions;
 
-  Match(
-      {required this.id,
-      required this.round,
-      required this.date,
-      required this.country,
-      required this.awayTeam,
-      required this.homeTeam,
-      required this.league,
-      required this.state});
+  Match({
+    required this.id,
+    required this.round,
+    required this.date,
+    required this.country,
+    required this.awayTeam,
+    required this.homeTeam,
+    required this.league,
+    required this.state,
+  }) : reactions = {
+          'loved': Random().nextInt(100),
+          'angry': Random().nextInt(100),
+          'disappointed': Random().nextInt(100),
+          'cool': Random().nextInt(100),
+          'shocked': Random().nextInt(100),
+        };
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
