@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:fan_react/models/away_team.dart/away_team.dart';
+import 'package:fan_react/models/comment/comment.dart';
 import 'package:fan_react/models/country/country.dart';
 import 'package:fan_react/models/home_team.dart/home_team.dart';
 import 'package:fan_react/models/league/league.dart';
@@ -15,6 +16,7 @@ class Match {
   final HomeTeam homeTeam;
   final League league;
   final MatchState state;
+  final List<Comment> comments;
   final Map<String, int> reactions;
 
   Match({
@@ -26,13 +28,15 @@ class Match {
     required this.homeTeam,
     required this.league,
     required this.state,
-  }) : reactions = {
-          'loved': Random().nextInt(100),
-          'angry': Random().nextInt(100),
-          'disappointed': Random().nextInt(100),
-          'cool': Random().nextInt(100),
-          'shocked': Random().nextInt(100),
-        };
+    this.comments = const [],
+    this.reactions = const {
+      'loved': 0,
+      'angry': 0,
+      'disappointed': 0,
+      'cool': 0,
+      'shocked': 0,
+    },
+  });
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -44,10 +48,12 @@ class Match {
       'homeTeam': homeTeam.toMap(),
       'league': league.toMap(),
       'state': state.toMap(),
+      'reactions': reactions,
     };
   }
 
   factory Match.fromMap(Map<String, dynamic> map) {
+    final random = Random();
     return Match(
       id: map['id'] as int,
       round: map['round'] as String,
@@ -57,6 +63,14 @@ class Match {
       homeTeam: HomeTeam.fromMap(map['homeTeam'] as Map<String, dynamic>),
       league: League.fromMap(map['league'] as Map<String, dynamic>),
       state: MatchState.fromMap(map['state'] as Map<String, dynamic>),
+      reactions: Map<String, int>.from(map['reactions'] ??
+          {
+            'loved': random.nextInt(100),
+            'angry': random.nextInt(100),
+            'disappointed': random.nextInt(100),
+            'cool': random.nextInt(100),
+            'shocked': random.nextInt(100),
+          }),
     );
   }
 

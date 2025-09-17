@@ -124,8 +124,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       return;
     }
 
-    if (_commentController.text.isNotEmpty &&
-        _commentController.text.length <= 140) {
+    final commentText = _commentController.text.trim();
+    if (commentText.isNotEmpty && commentText.length <= 140) {
       setState(() {
         isSubmittingComment = true;
       });
@@ -135,7 +135,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         await _firestoreService.addComment(
           widget.match.id,
           user.uid,
-          _commentController.text,
+          commentText,
         );
         _commentController.clear();
         await fetchComments();

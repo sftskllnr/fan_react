@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fan_react/models/comment/comment.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:fan_react/models/user/user_profile.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,30 +19,55 @@ class FirestoreService {
           fromFirestore: (snapshot, _) => UserProfile.fromMap(snapshot.data()!),
           toFirestore: (user, _) => user.toMap());
 
-  Future<void> addMatch(Match match) async {
-    await matchesCollection.doc(match.id.toString()).set(match);
-  }
+  // Future<void> addMatchesList(List<Match> matches) async {
+  //   final batch = _firestore.batch();
 
-  Future<void> initializeMatch(int matchId) async {
-    final docRef = FirebaseFirestore.instance
-        .collection('matches')
-        .doc(matchId.toString());
-    final doc = await docRef.get();
-    if (!doc.exists) {
-      await docRef.set({
-        'reactions': {
-          'loved': Random().nextInt(100),
-          'angry': Random().nextInt(100),
-          'disappointed': Random().nextInt(100),
-          'cool': Random().nextInt(100),
-          'shocked': Random().nextInt(100),
-        },
-      });
+  //   for (final match in matches) {
+  //     final docRef = matchesCollection.doc(match.id.toString());
+  //     final docSnapshot = await docRef.get();
+  //     if (!docSnapshot.exists) {
+  //       batch.set(docRef, match);
+  //     }
+  //   }
+  //   batch.commit();
+  // }
+
+  Future<void> addMatchesList(List<Match> matches) async {
+    final existingIds = (await matchesCollection.limit(1).get())
+        .docs
+        .map((doc) => doc.id)
+        .toSet();
+
+    WriteBatch batch = _firestore.batch();
+    int operationCount = 0;
+
+    for (final match in matches) {
+      if (!existingIds.contains(match.id.toString())) {
+        final docRef = matchesCollection.doc(match.id.toString());
+        batch.set(docRef, match);
+        operationCount++;
+
+        if (operationCount == 500) {
+          await batch.commit();
+          batch = _firestore.batch();
+          operationCount = 0;
+        }
+      }
+    }
+
+    if (operationCount > 0) {
+      await batch.commit();
     }
   }
 
   Future<void> updateReaction(int matchId, String reactionType) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User must be authenticated to add a reaction.');
+    }
+
     final docRef = matchesCollection.doc(matchId.toString());
+    final userReactionsCollection = docRef.collection('userReactions');
 
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(docRef);
@@ -49,19 +75,48 @@ class FirestoreService {
         throw Exception('Match does not exist!');
       }
 
-      Map<String, int> reactions =
-          Map<String, int>.from(snapshot.data()?.reactions ??
-              {
-                'loved': Random().nextInt(100),
-                'angry': Random().nextInt(100),
-                'disappointed': Random().nextInt(100),
-                'cool': Random().nextInt(100),
-                'shocked': Random().nextInt(100),
-              });
+      final reactions = Map<String, int>.from(snapshot.data()!.reactions);
 
+      final currentReactionQuery = await userReactionsCollection
+          .where('userId', isEqualTo: user.uid)
+          .limit(1)
+          .get(const GetOptions(source: Source.server));
+      final currentReactionDoc = currentReactionQuery.docs.isNotEmpty
+          ? currentReactionQuery.docs.first
+          : null;
+      final currentReactionType =
+          currentReactionDoc?.data()['reactionType'] as String?;
+
+      if (currentReactionDoc != null && currentReactionType != null) {
+        transaction.delete(currentReactionDoc.reference);
+        reactions[currentReactionType] =
+            (reactions[currentReactionType] ?? 0) - 1;
+      }
+
+      final newReactionRef = userReactionsCollection.doc();
+      transaction.set(newReactionRef, {
+        'userId': user.uid,
+        'reactionType': reactionType,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
       reactions[reactionType] = (reactions[reactionType] ?? 0) + 1;
+
       transaction.update(docRef, {'reactions': reactions});
     });
+  }
+
+  Future<bool> hasUserReacted(int matchId, String reactionType) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    final userReactionsCollection =
+        matchesCollection.doc(matchId.toString()).collection('userReactions');
+    final querySnapshot = await userReactionsCollection
+        .where('userId', isEqualTo: user.uid)
+        .where('reactionType', isEqualTo: reactionType)
+        .limit(1)
+        .get();
+    return querySnapshot.docs.isNotEmpty;
   }
 
   Future<void> addComment(
@@ -73,12 +128,15 @@ class FirestoreService {
 
     final commentsCollection =
         matchesCollection.doc(matchId.toString()).collection('comments').doc();
-    await commentsCollection.set({
-      'userId': userId,
-      'userName': userProfile.name,
-      'commentText': commentText,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    final comment = Comment(
+      userId: userId,
+      userName: userProfile.name,
+      commentText: commentText,
+      timestamp: DateTime.now(),
+    );
+    await commentsCollection.set(comment.toJson()
+      ..['timestamp'] =
+          FieldValue.serverTimestamp()); // Override with server timestamp
   }
 
   Future<void> deleteComment(
@@ -118,6 +176,19 @@ class FirestoreService {
   Future<Match?> getMatch(int matchId) async {
     final docSnapshot = await matchesCollection.doc(matchId.toString()).get();
     return docSnapshot.data();
+  }
+
+  Stream<Match> getMatchStream(int matchId) {
+    return matchesCollection
+        .doc(matchId.toString())
+        .snapshots()
+        .map((snapshot) {
+      final matchData = snapshot.data();
+      if (matchData == null) {
+        throw Exception('Match data is null for matchId: $matchId');
+      }
+      return matchData;
+    });
   }
 
   Stream<List<Match>> getMatches() {
