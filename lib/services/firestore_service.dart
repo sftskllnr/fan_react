@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fan_react/models/achievement/achievement.dart';
 import 'package:fan_react/models/comment/comment.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:fan_react/models/user/user_profile.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final user = FirebaseAuth.instance.currentUser;
 
   CollectionReference<Match> get matchesCollection =>
       _firestore.collection('matches').withConverter<Match>(
@@ -19,18 +21,19 @@ class FirestoreService {
           fromFirestore: (snapshot, _) => UserProfile.fromMap(snapshot.data()!),
           toFirestore: (user, _) => user.toMap());
 
-  // Future<void> addMatchesList(List<Match> matches) async {
-  //   final batch = _firestore.batch();
+  CollectionReference get achievementsCollection =>
+      _firestore.collection('achievements');
 
-  //   for (final match in matches) {
-  //     final docRef = matchesCollection.doc(match.id.toString());
-  //     final docSnapshot = await docRef.get();
-  //     if (!docSnapshot.exists) {
-  //       batch.set(docRef, match);
-  //     }
-  //   }
-  //   batch.commit();
-  // }
+  CollectionReference get userAchievementsCollection =>
+      _firestore.collection('users').doc(user?.uid).collection('achievements');
+
+  CollectionReference get userLeagueInteractionsCollection => _firestore
+      .collection('users')
+      .doc(user?.uid)
+      .collection('leagueInteractions');
+
+  CollectionReference get userLoginHistoryCollection =>
+      _firestore.collection('users').doc(user?.uid).collection('loginHistory');
 
   Future<void> addMatchesList(List<Match> matches) async {
     final existingIds = (await matchesCollection.limit(1).get())
@@ -54,14 +57,12 @@ class FirestoreService {
         }
       }
     }
-
     if (operationCount > 0) {
       await batch.commit();
     }
   }
 
   Future<void> updateReaction(int matchId, String reactionType) async {
-    final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw Exception('User must be authenticated to add a reaction.');
     }
@@ -78,7 +79,7 @@ class FirestoreService {
       final reactions = Map<String, int>.from(snapshot.data()!.reactions);
 
       final currentReactionQuery = await userReactionsCollection
-          .where('userId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: user?.uid)
           .limit(1)
           .get(const GetOptions(source: Source.server));
       final currentReactionDoc = currentReactionQuery.docs.isNotEmpty
@@ -95,7 +96,7 @@ class FirestoreService {
 
       final newReactionRef = userReactionsCollection.doc();
       transaction.set(newReactionRef, {
-        'userId': user.uid,
+        'userId': user?.uid,
         'reactionType': reactionType,
         'timestamp': FieldValue.serverTimestamp(),
       });
@@ -127,16 +128,25 @@ class FirestoreService {
     }
 
     final commentsCollection =
-        matchesCollection.doc(matchId.toString()).collection('comments').doc();
+        matchesCollection.doc(matchId.toString()).collection('comments');
     final comment = Comment(
       userId: userId,
       userName: userProfile.name,
       commentText: commentText,
       timestamp: DateTime.now(),
     );
-    await commentsCollection.set(comment.toJson()
-      ..['timestamp'] =
-          FieldValue.serverTimestamp()); // Override with server timestamp
+
+    await _firestore.runTransaction((transaction) async {
+      final commentRef = commentsCollection.doc();
+      final commentSnapshot = await transaction.get(commentRef);
+      if (!commentSnapshot.exists) {
+        // Ensure this is a new comment
+        transaction.set(commentRef, {
+          ...comment.toMap(),
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+    });
   }
 
   Future<void> deleteComment(
@@ -160,7 +170,7 @@ class FirestoreService {
     });
   }
 
-  Future<List<Map<String, dynamic>>> getComments(int matchId) async {
+  Future<List<Map<String, dynamic>>> getCommentsMatch(int matchId) async {
     final querySnapshot = await matchesCollection
         .doc(matchId.toString())
         .collection('comments')
@@ -171,6 +181,60 @@ class FirestoreService {
       data['commentId'] = doc.id;
       return data;
     }).toList();
+  }
+
+  Future<List<Match>> getMatchesWithUserActivity() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception(
+          'User must be authenticated to retrieve matches with activity.');
+    }
+
+    final userId = user.uid;
+    try {
+      // Fetch all matches
+      final matchSnapshot = await matchesCollection.get();
+      final allMatches = matchSnapshot.docs.map((doc) => doc.data()).toList();
+
+      // Filter matches where user has comments or reactions
+      final matchesWithActivity =
+          await Future.wait(allMatches.map((match) async {
+        final hasComments = await _hasUserComments(match.id, userId);
+        final hasReactions = await _hasUserReactions(match.id, userId);
+        return hasComments || hasReactions ? match : null;
+      }));
+
+      // Remove null entries and sort by date in descending order
+      return matchesWithActivity.whereType<Match>().toList()
+        ..sort((a, b) => (b.date).compareTo(a.date));
+    } catch (e) {
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        throw Exception(
+            'Permission denied. Ensure security rules allow read access to matches.');
+      }
+      rethrow;
+    }
+  }
+
+// Helper methods to check user activity
+  Future<bool> _hasUserComments(int matchId, String userId) async {
+    final commentsQuery = matchesCollection
+        .doc(matchId.toString())
+        .collection('comments')
+        .where('userId', isEqualTo: userId)
+        .limit(1)
+        .get();
+    return (await commentsQuery).docs.isNotEmpty;
+  }
+
+  Future<bool> _hasUserReactions(int matchId, String userId) async {
+    final reactionsQuery = matchesCollection
+        .doc(matchId.toString())
+        .collection('userReactions')
+        .where('userId', isEqualTo: userId)
+        .limit(1)
+        .get();
+    return (await reactionsQuery).docs.isNotEmpty;
   }
 
   Future<Match?> getMatch(int matchId) async {
@@ -191,10 +255,173 @@ class FirestoreService {
     });
   }
 
-  Stream<List<Match>> getMatches() {
-    return matchesCollection
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+  // Initialize achievements for a user with progress and streak
+  Future<void> initializeAchievements(String userId) async {
+    final achievementsSnapshot = await achievementsCollection.get();
+    final batch = _firestore.batch();
+
+    for (var doc in achievementsSnapshot.docs) {
+      final achievement =
+          Achievement.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      final userAchievementRef = userAchievementsCollection.doc(doc.id);
+      batch.set(
+          userAchievementRef,
+          {
+            ...achievement.toMap(),
+            'progress': 0,
+            'streak': 0,
+          },
+          SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  Future<void> updateAchievementProgress(
+      String userId, String achievementId, int increment,
+      {bool isSequential = false, String lastReaction = ''}) async {
+    final userAchievementRef = userAchievementsCollection.doc(achievementId);
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(userAchievementRef);
+      if (!snapshot.exists) {
+        throw Exception('Achievement not found for user');
+      }
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final currentProgress = data['progress'] ?? 0;
+      final currentStreak = data['streak'] ?? 0;
+      final targetValue = data['targetValue'] as int;
+      final newProgress = (currentProgress + increment).clamp(0, targetValue);
+
+      int newStreak = currentStreak;
+      if (isSequential && lastReaction == 'shocked') {
+        newStreak = currentStreak + 1;
+      } else if (isSequential && lastReaction != 'shocked') {
+        newStreak = 0;
+      }
+
+      transaction.update(userAchievementRef, {
+        'progress': newProgress,
+        'streak': newStreak,
+        'isUnlocked': newProgress >= targetValue ||
+            (isSequential && newStreak >= targetValue),
+      });
+    });
+  }
+
+  // Check and update achievements based on an event
+  Future<void> checkAchievements(String userId, String eventType,
+      {int matchId = 0, String reactionType = ''}) async {
+    final achievementsSnapshot = await achievementsCollection.get();
+    for (var doc in achievementsSnapshot.docs) {
+      final achievement =
+          Achievement.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      switch (achievement.type) {
+        case 'reaction':
+          if (eventType == 'reaction' &&
+              achievement.name == 'Fan in Love' &&
+              reactionType == 'loved') {
+            await updateAchievementProgress(userId, achievement.id, 1);
+          } else if (eventType == 'reaction' &&
+              achievement.name == 'Mind = Blown') {
+            await updateAchievementProgress(userId, achievement.id, 1,
+                isSequential: true, lastReaction: reactionType);
+          } else if (eventType == 'reaction' &&
+              achievement.name == 'Mood Swing') {
+            await updateAchievementProgress(userId, achievement.id, 1);
+          } else if (eventType == 'reaction' &&
+              achievement.name == 'Cold Blooded') {
+            final matchDoc =
+                await matchesCollection.doc(matchId.toString()).get();
+            if (matchDoc.exists) {
+              final matchData = matchDoc.data();
+              final totalReactions =
+                  matchData?.reactions.values.reduce((a, b) => a + b) ?? 0;
+              if (totalReactions == 1) {
+                await updateAchievementProgress(userId, achievement.id, 1);
+              }
+            }
+          } else if (eventType == 'reaction' &&
+              achievement.name == 'Reaction Master') {
+            await updateAchievementProgress(userId, achievement.id, 1);
+          }
+          break;
+        case 'comment':
+          if (eventType == 'comment' && achievement.name == 'First Word') {
+            final commentsCollection = matchesCollection
+                .doc(matchId.toString())
+                .collection('comments');
+            final commentSnapshot = await commentsCollection.limit(1).get();
+            if (commentSnapshot.docs.isEmpty) {
+              await updateAchievementProgress(userId, achievement.id, 1);
+            }
+          } else if (eventType == 'comment' && achievement.name == 'Explorer') {
+            await updateLeagueInteraction(userId, matchId);
+          } else if (eventType == 'comment' &&
+              achievement.name == 'Comment Veteran') {
+            await updateAchievementProgress(userId, achievement.id, 1);
+          }
+          break;
+        case 'login_streak':
+          if (eventType == 'login' && achievement.name == '3-Day Streak') {
+            await updateLoginStreak(userId);
+          }
+          break;
+      }
+    }
+  }
+
+  Future<void> updateLeagueInteraction(String userId, int matchId) async {
+    final matchDoc = await matchesCollection.doc(matchId.toString()).get();
+    if (matchDoc.exists) {
+      final matchData = matchDoc.data();
+      final leagueId = matchData?.league.id ?? 0;
+
+      final interactionRef =
+          userLeagueInteractionsCollection.doc('uniqueLeagues');
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(interactionRef);
+        final data = snapshot.data() as Map<String, dynamic>?;
+        final currentLeagues = (data?['leagues'] as List<dynamic>?)
+                ?.map((e) => e as int)
+                .toSet() ??
+            <int>{};
+        if (!currentLeagues.contains(leagueId)) {
+          currentLeagues.add(leagueId);
+          transaction.set(
+              interactionRef,
+              {
+                'leagues': currentLeagues.toList(),
+                'updatedAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true));
+
+          // Update Explorer achievement progress
+          final explorerAchievement =
+              await userAchievementsCollection.doc('explorer').get();
+          if (explorerAchievement.exists) {
+            final achievementData =
+                explorerAchievement.data() as Map<String, dynamic>;
+            final currentProgress = achievementData['progress'] ?? 0;
+            final targetValue = achievementData['targetValue'] as int;
+            final newProgress = currentLeagues.length.clamp(0, targetValue);
+
+            transaction.update(userAchievementsCollection.doc('explorer'), {
+              'progress': newProgress,
+              'isUnlocked': newProgress >= targetValue,
+            });
+          }
+        }
+      });
+    }
+  }
+
+  // Stream to listen for achievement updates
+  Stream<List<Achievement>> getUserAchievementsStream(String userId) {
+    return userAchievementsCollection.snapshots().map((snapshot) => snapshot
+        .docs
+        .map((doc) =>
+            Achievement.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList());
   }
 
   Future<UserProfile> createUserProfile() async {
@@ -217,5 +444,53 @@ class FirestoreService {
   Future<UserProfile?> getUserProfile(String userId) async {
     final docSnapshot = await usersCollection.doc(userId).get();
     return docSnapshot.data();
+  }
+
+  // Update login history and calculate streak
+  Future<void> updateLoginStreak(String userId) async {
+    final loginRef =
+        userLoginHistoryCollection.doc(DateTime.now().toIso8601String());
+    await loginRef.set({
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await _firestore.runTransaction((transaction) async {
+      final loginSnapshots = await userLoginHistoryCollection
+          .orderBy('timestamp', descending: true)
+          .limit(4) // Fetch last 4 logins to check 3-day streak
+          .get();
+      final loginTimestamps = loginSnapshots.docs
+          .map((doc) =>
+              (doc.data() as Map<String, dynamic>)['timestamp']?.toDate() ??
+              DateTime.now())
+          .toList();
+
+      if (loginTimestamps.length < 2) return; // Not enough logins for streak
+
+      loginTimestamps.sort((a, b) => a.compareTo(b)); // Sort ascending
+      int streak = 1;
+      for (int i = 1; i < loginTimestamps.length; i++) {
+        final diff =
+            loginTimestamps[i].difference(loginTimestamps[i - 1]).inDays;
+        if (diff == 1) {
+          streak++;
+        } else if (diff > 1) {
+          break; // Reset streak if a day is missed
+        }
+      }
+
+      // Update 3-Day Streak achievement
+      final streakAchievement =
+          await userAchievementsCollection.doc('3_day_streak').get();
+      if (streakAchievement.exists) {
+        final achievementData =
+            streakAchievement.data() as Map<String, dynamic>;
+        final targetValue = achievementData['targetValue'] as int;
+        transaction.update(userAchievementsCollection.doc('3_day_streak'), {
+          'streak': streak,
+          'isUnlocked': streak >= targetValue,
+        });
+      }
+    });
   }
 }

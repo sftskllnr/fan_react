@@ -104,7 +104,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     });
     try {
       final fetchedComments =
-          await _firestoreService.getComments(widget.match.id);
+          await _firestoreService.getCommentsMatch(widget.match.id);
 
       listComments = fetchedComments;
       isLoadingComments = false;
@@ -138,6 +138,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
           commentText,
         );
         _commentController.clear();
+        await _firestoreService.checkAchievements(user.uid, 'comment',
+            matchId: widget.match.id);
         await fetchComments();
       } catch (e) {
         debugPrint('Error sending comment: $e');

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 
 class Comment {
   final String userId;
@@ -13,21 +13,25 @@ class Comment {
     required this.timestamp,
   });
 
-  factory Comment.fromJson(Map<String, dynamic> json) {
-    return Comment(
-      userId: json['userId'] as String,
-      userName: json['userName'] as String,
-      commentText: json['commentText'] as String,
-      timestamp: (json['timestamp'] as Timestamp).toDate(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
       'userId': userId,
       'userName': userName,
       'commentText': commentText,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': timestamp.millisecondsSinceEpoch
     };
   }
+
+  factory Comment.fromMap(Map<String, dynamic> map) {
+    return Comment(
+        userId: map['userId'] as String,
+        userName: map['userName'] as String,
+        commentText: map['commentText'] as String,
+        timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp']));
+  }
+
+  String toJson() => json.encode(toMap());
+
+  factory Comment.fromJson(String source) =>
+      Comment.fromMap(json.decode(source) as Map<String, dynamic>);
 }

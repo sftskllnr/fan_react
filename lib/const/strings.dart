@@ -123,3 +123,64 @@ String thisAction = 'This action cannot be undone.';
 String cancel = 'Cancel';
 String delete = 'Delete';
 String penalties = 'Penalties';
+
+// HISTORY
+String noActivity = 'No activity yet';
+String matchesYou = 'Matches you react to or comment on will appear here';
+
+final achievementsMap = {
+  'fan_in_love': {
+    'name': 'Fan in Love',
+    'description': 'React with ❤️ on 10 different matches',
+    'targetValue': 10,
+    'type': 'reaction',
+  },
+  'mind_blown': {
+    'name': 'Mind = Blown',
+    'description': 'Use the 😲 reaction in 3 matches in a row.',
+    'targetValue': 3,
+    'type': 'reaction',
+  },
+  'mood_swing': {
+    'name': 'Mood Swing',
+    'description': 'Use all 5 types of reactions in a single day.',
+    'targetValue': 5,
+    'type': 'reaction',
+  },
+  'first_word': {
+    'name': 'First Word',
+    'description': 'Be the first to comment on a match.',
+    'targetValue': 1,
+    'type': 'comment',
+  },
+  'cold_blooded': {
+    'name': 'Cold Blooded',
+    'description': 'Give your initial reaction to the match',
+    'targetValue': 1,
+    'type': 'reaction',
+  },
+  'explorer': {
+    'name': 'Explorer',
+    'description': 'React or comment on matches from 5 different leagues.',
+    'targetValue': 5,
+    'type': 'comment',
+  },
+  'reaction_master': {
+    'name': 'Reaction Master',
+    'description': 'Give 50 total reactions across matches.',
+    'targetValue': 50,
+    'type': 'reaction',
+  },
+  '3_day_streak': {
+    'name': '3-Day Streak',
+    'description': 'Log in to the app 3 days in a row.',
+    'targetValue': 3,
+    'type': 'login_streak',
+  },
+  'comment_veteran': {
+    'name': 'Comment Veteran',
+    'description': 'Leave comments on 25 different matches.',
+    'targetValue': 25,
+    'type': 'comment',
+  },
+};

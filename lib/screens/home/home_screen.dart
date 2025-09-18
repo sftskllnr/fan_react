@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'package:fan_react/api/api_client.dart';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
+import 'package:fan_react/main.dart';
 import 'package:fan_react/models/league/league_season.dart';
-import 'package:fan_react/screens/achievement/achievement.dart';
+import 'package:fan_react/screens/achievements/achievements.dart';
 import 'package:fan_react/screens/history/history.dart';
 import 'package:fan_react/screens/home/bottom_nav_bar/bottom_nav_bar.dart';
 import 'package:fan_react/screens/home/bottom_nav_bar/bottom_nav_bar_item.dart';
@@ -16,10 +16,6 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 
-//guide dialog
-late BuildContext _aContext;
-late BuildContext _bContext;
-
 class HomeScreen extends StatefulWidget {
   final String? payload;
   const HomeScreen({super.key, this.payload});
@@ -28,12 +24,7 @@ class HomeScreen extends StatefulWidget {
   State<StatefulWidget> createState() => _HomeScreen();
 }
 
-final ValueNotifier selectedIndexGlobal = ValueNotifier(0);
-final ValueNotifier isLeagueSelected = ValueNotifier(false);
-final ValueNotifier selectedLeagueId = ValueNotifier(0);
-
 class _HomeScreen extends State<HomeScreen> {
-  late ApiClient _apiClient;
   late PanelController _panelController;
   late List<Widget> _listWidgets;
   late TextEditingController _searchController;
@@ -50,7 +41,6 @@ class _HomeScreen extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _apiClient = ApiClient();
     _panelController = PanelController();
     _searchController = TextEditingController();
     _scrollController = ScrollController();
@@ -58,7 +48,7 @@ class _HomeScreen extends State<HomeScreen> {
     _listWidgets = [
       Matches(showHidePanel: showHidePanel),
       const History(),
-      const Achievement(),
+      const Achievements(),
       const Profile()
     ];
     _getAllLeagues();
@@ -112,7 +102,7 @@ class _HomeScreen extends State<HomeScreen> {
   }
 
   Future<void> _getAllLeagues() async {
-    List<LeagueSeason> leagues = await _apiClient.getAllLeagues();
+    List<LeagueSeason> leagues = await apiClient.getAllLeagues();
     setState(() {
       leaguesList.clear();
       leaguesList.addAll(leagues);
@@ -190,7 +180,7 @@ class _HomeScreen extends State<HomeScreen> {
       left: padding,
       top: topPadding,
       child: Builder(builder: (context) {
-        _aContext = context;
+        aContext = context;
         return matchItem(context);
       }),
     );
@@ -202,7 +192,7 @@ class _HomeScreen extends State<HomeScreen> {
       right: padding,
       top: topPadding * 2 + padding,
       child: Builder(builder: (context) {
-        _bContext = context;
+        bContext = context;
         return reactDescription();
       }),
     );
@@ -452,7 +442,9 @@ class _HomeScreen extends State<HomeScreen> {
                   height: navBatHeight,
                   child: BottomNavBar(
                       curentIndex: selectedIndexGlobal.value,
-                      onTap: (index) => selectedIndexGlobal.value = index,
+                      onTap: (index) => setState(() {
+                            selectedIndexGlobal.value = index;
+                          }),
                       children: [
                         BottomNavBarItem(
                             title: matches,

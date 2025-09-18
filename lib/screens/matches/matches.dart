@@ -1,9 +1,8 @@
-import 'package:fan_react/api/api_client.dart';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
+import 'package:fan_react/main.dart';
 import 'package:fan_react/screens/details/match_details_screen.dart';
-import 'package:fan_react/screens/home/home_screen.dart';
 import 'package:fan_react/services/firestore_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -21,21 +20,13 @@ class Matches extends StatefulWidget {
 }
 
 class _MatchesState extends State<Matches> {
-  late ApiClient _apiClient;
-  late FirestoreService _firestoreService;
-  List<Match> allMatches = List<Match>.empty(growable: true);
-  List<Match> selectedLeagueMatches = List.empty(growable: true);
   int? _lastFetchedLeagueId;
-  bool isLoading = false;
-
-  final Map<int, String> _selectedReactions = {};
 
   @override
   void initState() {
     super.initState();
-    _apiClient = ApiClient();
-    _firestoreService = FirestoreService();
-    getAllMatches();
+    // getAllMatches();
+    _initializeMatches();
   }
 
   void getLeagueMatches(int leagueId) async {
@@ -43,18 +34,18 @@ class _MatchesState extends State<Matches> {
       return;
     }
     if (_lastFetchedLeagueId != leagueId) {
-      isLoading = true;
+      isLoadingMatches = true;
       try {
-        List<Match> matches = await _apiClient.getLeagueMatches(leagueId);
+        List<Match> matches = await apiClient.getLeagueMatches(leagueId);
         selectedLeagueMatches.clear();
         selectedLeagueMatches.addAll(matches);
         _lastFetchedLeagueId = leagueId;
-        isLoading = false;
+        isLoadingMatches = false;
         setState(() {});
       } catch (e) {
         selectedLeagueMatches.clear();
         _lastFetchedLeagueId = null;
-        isLoading = false;
+        isLoadingMatches = false;
         setState(() {});
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -65,43 +56,74 @@ class _MatchesState extends State<Matches> {
     }
   }
 
-  void getAllMatches() async {
+  Future<void> _initializeMatches() async {
+    setState(() => isLoadingMatches = true);
     try {
-      List<Match> matches = await _apiClient.getAllMatches();
-      allMatches.clear();
-      allMatches.addAll(matches);
-      setState(() {});
-      _syncMatchesToFirestore(matches);
-      await _updateReactionsForMatches(matches);
+      // Step 1: Fetch yesterday's matches from API
+      List<Match> apiMatches = await apiClient.getAllMatches();
+
+      // Step 2: Sync matches to Firestore (addMatchesList already checks for duplicates)
+      await firestoreService.addMatchesList(apiMatches);
+
+      // Step 3: Fetch all matches from Firestore
+      final matchSnapshot = await firestoreService.matchesCollection.get();
+      allMatches.clear(); // Clear existing matches to avoid duplicates
+      allMatches.addAll(matchSnapshot.docs.map((doc) => doc.data()).toList());
+
+      // Step 4: Update reactions for the matches
+      await _updateReactionsForMatches(allMatches);
+
+      // Step 5: Update reactions match activities
+      await loadMatchActivities();
+
+      setState(() => isLoadingMatches = false);
     } catch (e) {
+      setState(() => isLoadingMatches = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load matches: $e')),
+          SnackBar(content: Text('Failed to initialize matches: $e')),
         );
       }
     }
   }
 
-  Future<void> _syncMatchesToFirestore(List<Match> matches) async {
-    await _firestoreService.addMatchesList(matches);
+  Future<void> loadMatchActivities() async {
+    try {
+      final matches = await firestoreService.getMatchesWithUserActivity();
+      setState(() {
+        matchesWithActivities.value = matches;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading comments: $e')),
+        );
+      }
+    }
   }
 
   Future<void> sendReaction(int matchId, String reactionType) async {
     try {
-      await _firestoreService.updateReaction(matchId, reactionType);
-
-      final updatedMatch = await _firestoreService.getMatch(matchId);
+      await firestoreService.updateReaction(matchId, reactionType);
+      final updatedMatch = await firestoreService.getMatch(matchId);
       if (updatedMatch != null) {
-        setState(() {
-          final indexAll = allMatches.indexWhere((m) => m.id == matchId);
-          if (indexAll != -1) allMatches[indexAll] = updatedMatch;
-          final indexSelected =
-              selectedLeagueMatches.indexWhere((m) => m.id == matchId);
-          if (indexSelected != -1) {
-            selectedLeagueMatches[indexSelected] = updatedMatch;
-          }
-          _selectedReactions[matchId] = reactionType;
-        });
+        final indexAll = allMatches.indexWhere((m) => m.id == matchId);
+        if (indexAll != -1) {
+          allMatches[indexAll] = updatedMatch;
+        }
+        final indexSelected =
+            selectedLeagueMatches.indexWhere((m) => m.id == matchId);
+        if (indexSelected != -1) {
+          selectedLeagueMatches[indexSelected] = updatedMatch;
+        }
+        selectedReactions[matchId] = reactionType;
+        setState(() {});
+
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await firestoreService.checkAchievements(user.uid, 'reaction',
+              reactionType: reactionType);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -116,7 +138,6 @@ class _MatchesState extends State<Matches> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Batch reaction checks
     final reactionFutures = matches.map((match) async {
       for (final reactionType in [
         'loved',
@@ -126,18 +147,14 @@ class _MatchesState extends State<Matches> {
         'shocked'
       ]) {
         final hasReacted =
-            await _firestoreService.hasUserReacted(match.id, reactionType);
+            await firestoreService.hasUserReacted(match.id, reactionType);
         if (hasReacted) {
-          if (mounted) {
-            setState(() {
-              _selectedReactions[match.id] = reactionType;
-            });
-          }
+          selectedReactions[match.id] = reactionType;
+          setState(() {});
           break;
         }
       }
     }).toList();
-
     await Future.wait(reactionFutures);
   }
 
@@ -168,9 +185,9 @@ class _MatchesState extends State<Matches> {
 
   Widget matchItem(Match match, void Function(Match) onTap) {
     return StreamBuilder<Match>(
-        stream: _firestoreService.getMatchStream(match.id),
+        stream: firestoreService.getMatchStream(match.id),
         builder: (context, snapshot) {
-          final selectedReaction = _selectedReactions[match.id];
+          final selectedReaction = selectedReactions[match.id];
           final currentMatch = snapshot.data ?? match;
           final currentReactions = currentMatch.reactions;
 
@@ -214,7 +231,10 @@ class _MatchesState extends State<Matches> {
                                 style: size12semibold.copyWith(color: G_700)),
                             Text(match.league.name, style: size12semibold)
                           ],
-                        )
+                        ),
+                        const Spacer(),
+                        Icon(Icons.arrow_forward_ios_outlined,
+                            color: G_900, size: padding, weight: 1)
                       ],
                     ),
                     const SizedBox(height: padding / 2),
@@ -432,9 +452,14 @@ class _MatchesState extends State<Matches> {
                     child: ValueListenableBuilder(
                       valueListenable: isLeagueSelected,
                       builder: (context, isSelected, child) {
-                        return isLoading
-                            ? const Center(
-                                child: CircularProgressIndicator.adaptive())
+                        return isLoadingMatches
+                            ? Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                    LottieBuilder.asset(preloader,
+                                        width: 100, height: 100),
+                                    Text(loading, style: size15semibold)
+                                  ])
                             : isSelected
                                 ? selectedLeagueMatches.isEmpty
                                     ? noResultsFound()
