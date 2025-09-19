@@ -32,12 +32,14 @@ String chatConversation = 'assets/svg/chat_conversation.svg';
 String moreHorizontal = 'assets/svg/more_horizontal.svg';
 String trash = 'assets/svg/trash_empty.svg';
 String chatClose = 'assets/svg/chat_close.svg';
+String tickCircle = 'assets/svg/tick-circle.svg';
 //
 String cool = 'assets/png/cool.png';
 String angry = 'assets/png/angry.png';
 String disappointed = 'assets/png/dissapointed.png';
 String shocked = 'assets/png/shocked.png';
 String loved = 'assets/png/loved.png';
+//
 String commentVeteran = 'assets/svg/comment_veteran.svg';
 String threeDayStreak = 'assets/svg/three_day_streak.svg';
 String reactionMaster = 'assets/svg/reaction_master.svg';
@@ -47,6 +49,7 @@ String firstWord = 'assets/svg/first_word.svg';
 String moodSwing = 'assets/svg/mood_swing.svg';
 String mindBlown = 'assets/svg/mind_blown.svg';
 String fanInLove = 'assets/svg/fan_in_love.svg';
+//
 String preloaderBack = 'assets/svg/preloader_back.svg';
 
 // png
@@ -128,59 +131,18 @@ String penalties = 'Penalties';
 String noActivity = 'No activity yet';
 String matchesYou = 'Matches you react to or comment on will appear here';
 
-final achievementsMap = {
-  'fan_in_love': {
-    'name': 'Fan in Love',
-    'description': 'React with ❤️ on 10 different matches',
-    'targetValue': 10,
-    'type': 'reaction',
-  },
-  'mind_blown': {
-    'name': 'Mind = Blown',
-    'description': 'Use the 😲 reaction in 3 matches in a row.',
-    'targetValue': 3,
-    'type': 'reaction',
-  },
-  'mood_swing': {
-    'name': 'Mood Swing',
-    'description': 'Use all 5 types of reactions in a single day.',
-    'targetValue': 5,
-    'type': 'reaction',
-  },
-  'first_word': {
-    'name': 'First Word',
-    'description': 'Be the first to comment on a match.',
-    'targetValue': 1,
-    'type': 'comment',
-  },
-  'cold_blooded': {
-    'name': 'Cold Blooded',
-    'description': 'Give your initial reaction to the match',
-    'targetValue': 1,
-    'type': 'reaction',
-  },
-  'explorer': {
-    'name': 'Explorer',
-    'description': 'React or comment on matches from 5 different leagues.',
-    'targetValue': 5,
-    'type': 'comment',
-  },
-  'reaction_master': {
-    'name': 'Reaction Master',
-    'description': 'Give 50 total reactions across matches.',
-    'targetValue': 50,
-    'type': 'reaction',
-  },
-  '3_day_streak': {
-    'name': '3-Day Streak',
-    'description': 'Log in to the app 3 days in a row.',
-    'targetValue': 3,
-    'type': 'login_streak',
-  },
-  'comment_veteran': {
-    'name': 'Comment Veteran',
-    'description': 'Leave comments on 25 different matches.',
-    'targetValue': 25,
-    'type': 'comment',
-  },
-};
+// ACHIVE
+List<String> achievementsListSvg = [
+  threeDayStreak,
+  coldBlooded,
+  commentVeteran,
+  explorer,
+  fanInLove,
+  firstWord,
+  mindBlown,
+  moodSwing,
+  reactionMaster
+];
+
+String newAchievUnlock = 'New achievement unlocked';
+String view = 'View';

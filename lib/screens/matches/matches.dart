@@ -3,7 +3,6 @@ import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
 import 'package:fan_react/main.dart';
 import 'package:fan_react/screens/details/match_details_screen.dart';
-import 'package:fan_react/services/firestore_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fan_react/models/match/match.dart';
@@ -25,7 +24,6 @@ class _MatchesState extends State<Matches> {
   @override
   void initState() {
     super.initState();
-    // getAllMatches();
     _initializeMatches();
   }
 
@@ -59,21 +57,16 @@ class _MatchesState extends State<Matches> {
   Future<void> _initializeMatches() async {
     setState(() => isLoadingMatches = true);
     try {
-      // Step 1: Fetch yesterday's matches from API
       List<Match> apiMatches = await apiClient.getAllMatches();
 
-      // Step 2: Sync matches to Firestore (addMatchesList already checks for duplicates)
       await firestoreService.addMatchesList(apiMatches);
 
-      // Step 3: Fetch all matches from Firestore
       final matchSnapshot = await firestoreService.matchesCollection.get();
-      allMatches.clear(); // Clear existing matches to avoid duplicates
+      allMatches.clear();
       allMatches.addAll(matchSnapshot.docs.map((doc) => doc.data()).toList());
 
-      // Step 4: Update reactions for the matches
       await _updateReactionsForMatches(allMatches);
 
-      // Step 5: Update reactions match activities
       await loadMatchActivities();
 
       setState(() => isLoadingMatches = false);
@@ -104,6 +97,7 @@ class _MatchesState extends State<Matches> {
 
   Future<void> sendReaction(int matchId, String reactionType) async {
     try {
+      final currentReaction = selectedReactions[matchId];
       await firestoreService.updateReaction(matchId, reactionType);
       final updatedMatch = await firestoreService.getMatch(matchId);
       if (updatedMatch != null) {
@@ -116,13 +110,22 @@ class _MatchesState extends State<Matches> {
         if (indexSelected != -1) {
           selectedLeagueMatches[indexSelected] = updatedMatch;
         }
-        selectedReactions[matchId] = reactionType;
+        if (currentReaction == reactionType) {
+          selectedReactions.remove(matchId);
+        } else {
+          selectedReactions[matchId] = reactionType;
+        }
         setState(() {});
 
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
-          await firestoreService.checkAchievements(user.uid, 'reaction',
-              reactionType: reactionType);
+          await firestoreService.checkAchievements(
+            user.uid,
+            'reaction',
+            matchId: matchId,
+            reactionType: reactionType,
+            isCancellation: currentReaction == reactionType,
+          );
         }
       }
     } catch (e) {
@@ -396,6 +399,76 @@ class _MatchesState extends State<Matches> {
         });
   }
 
+  Map<String, List<Match>> groupMatchesByDate(List<Match> matches) {
+    final Map<String, List<Match>> groupedMatches = {};
+    for (var match in matches) {
+      final date =
+          DateFormat('EEEE, dd MMMM yyyy').format(DateTime.parse(match.date));
+      if (!groupedMatches.containsKey(date)) {
+        groupedMatches[date] = [];
+      }
+      groupedMatches[date]!.add(match);
+    }
+    return groupedMatches;
+  }
+
+  Widget selectedMatchesGroup() {
+    return ListView.builder(
+        itemCount: groupMatchesByDate(selectedLeagueMatches).length,
+        itemBuilder: (context, index) {
+          final groupedMatches = groupMatchesByDate(selectedLeagueMatches);
+          final dates = groupedMatches.keys.toList();
+          final date = dates[index];
+          final matchesForDate = groupedMatches[date]!;
+          return Padding(
+            padding: const EdgeInsets.only(top: padding / 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: padding / 2),
+                  child: Text(
+                    date,
+                    style: size15semibold.copyWith(color: G_700),
+                  ),
+                ),
+                ...matchesForDate.map((match) => Padding(
+                      padding: const EdgeInsets.only(top: padding / 2),
+                      child: matchItem(match, goToMatchDetails),
+                    )),
+              ],
+            ),
+          );
+        });
+  }
+
+  Widget allMatchesGroup() {
+    return ListView.builder(
+      itemCount: groupMatchesByDate(allMatches).length,
+      itemBuilder: (context, index) {
+        final groupedMatches = groupMatchesByDate(allMatches);
+        final dates = groupedMatches.keys.toList();
+        final date = dates[index];
+        final matchesForDate = groupedMatches[date]!;
+        return Padding(
+          padding: const EdgeInsets.only(top: padding / 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(date, style: size15semibold.copyWith(color: G_700)),
+              ...matchesForDate.map(
+                (match) => Padding(
+                  padding: const EdgeInsets.only(top: padding / 2),
+                  child: matchItem(match, goToMatchDetails),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     DateFormat dateFormatBack = DateFormat('EEEE, MMM d, yyyy');
@@ -432,71 +505,36 @@ class _MatchesState extends State<Matches> {
             getLeagueMatches(leagueId);
             return Container(
               color: G_400,
-              padding: const EdgeInsets.symmetric(horizontal: padding / 2),
+              padding: const EdgeInsets.symmetric(horizontal: padding),
               height: screenHeight -
                   appBar.preferredSize.height -
                   padding * 2 -
                   navBatHeight,
-              child: Column(
-                children: [
-                  Container(
-                      alignment: Alignment.center,
-                      height: padding * 2,
-                      child: Text(date,
-                          style: size14semibold.copyWith(color: G_700))),
-                  SizedBox(
-                    height: screenHeight -
-                        appBar.preferredSize.height -
-                        padding * 6 -
-                        navBatHeight,
-                    child: ValueListenableBuilder(
-                      valueListenable: isLeagueSelected,
-                      builder: (context, isSelected, child) {
-                        return isLoadingMatches
-                            ? Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                    LottieBuilder.asset(preloader,
-                                        width: 100, height: 100),
-                                    Text(loading, style: size15semibold)
-                                  ])
-                            : isSelected
-                                ? selectedLeagueMatches.isEmpty
-                                    ? noResultsFound()
-                                    : ListView.builder(
-                                        itemCount: selectedLeagueMatches.length,
-                                        itemBuilder: (context, index) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                                bottom: padding / 4),
-                                            child: matchItem(
-                                                selectedLeagueMatches[index],
-                                                goToMatchDetails),
-                                          );
-                                        })
-                                : allMatches.isEmpty
-                                    ? Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                            LottieBuilder.asset(preloader,
-                                                width: 100, height: 100),
-                                            Text(loading, style: size15semibold)
-                                          ])
-                                    : ListView.builder(
-                                        itemCount: allMatches.length,
-                                        itemBuilder: (context, index) {
-                                          return Padding(
-                                              padding: const EdgeInsets.only(
-                                                  bottom: padding / 4),
-                                              child: matchItem(
-                                                  allMatches[index],
-                                                  goToMatchDetails));
-                                        });
-                      },
-                    ),
-                  ),
-                ],
+              child: ValueListenableBuilder(
+                valueListenable: isLeagueSelected,
+                builder: (context, isSelected, child) {
+                  return isLoadingMatches
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                              LottieBuilder.asset(preloader,
+                                  width: 100, height: 100),
+                              Text(loading, style: size15semibold)
+                            ])
+                      : isSelected
+                          ? selectedLeagueMatches.isEmpty
+                              ? noResultsFound()
+                              : selectedMatchesGroup()
+                          : allMatches.isEmpty
+                              ? Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                      LottieBuilder.asset(preloader,
+                                          width: 100, height: 100),
+                                      Text(loading, style: size15semibold)
+                                    ])
+                              : allMatchesGroup();
+                },
               ),
             );
           },

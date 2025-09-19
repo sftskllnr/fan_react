@@ -6,6 +6,7 @@ import 'package:fan_react/screens/details/match_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 
 class History extends StatefulWidget {
@@ -45,6 +46,19 @@ class _HistoryState extends State<History> {
         );
       }
     }
+  }
+
+  Map<String, List<Match>> groupMatchesByDate(List<Match> matches) {
+    final Map<String, List<Match>> groupedMatches = {};
+    for (var match in matches) {
+      final date =
+          DateFormat('EEEE, dd MMMM yyyy').format(DateTime.parse(match.date));
+      if (!groupedMatches.containsKey(date)) {
+        groupedMatches[date] = [];
+      }
+      groupedMatches[date]!.add(match);
+    }
+    return groupedMatches;
   }
 
   void goToMatchDetails(Match match) async {
@@ -272,7 +286,8 @@ class _HistoryState extends State<History> {
     double screenWidth = MediaQuery.sizeOf(context).width;
 
     return Scaffold(
-      appBar: AppBar(title: Text(history, style: size24bold)),
+      appBar:
+          AppBar(centerTitle: false, title: Text(history, style: size24bold)),
       body: ValueListenableBuilder(
         valueListenable: matchesWithActivities,
         builder: (context, matches, child) => Container(
@@ -284,17 +299,42 @@ class _HistoryState extends State<History> {
                   LottieBuilder.asset(preloader, width: 100, height: 100),
                   Text(loading, style: size15semibold)
                 ])
-              : ListView.builder(
-                  itemCount: matches.length,
-                  padding: const EdgeInsets.symmetric(
-                      vertical: padding / 2, horizontal: padding),
-                  itemBuilder: (context, index) {
-                    Match match = matches[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(top: padding / 2),
-                      child: matchItem(match, goToMatchDetails),
-                    );
-                  }),
+              : matches.isEmpty
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                          Text(noActivity, style: size15semibold),
+                          Text(matchesYou,
+                              style: size14medium.copyWith(color: G_700))
+                        ])
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: padding),
+                      itemCount: groupMatchesByDate(matches).length,
+                      itemBuilder: (context, index) {
+                        final groupedMatches = groupMatchesByDate(matches);
+                        final dates = groupedMatches.keys.toList();
+                        final date = dates[index];
+                        final matchesForDate = groupedMatches[date]!;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(top: padding / 2),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(date,
+                                  style: size15semibold.copyWith(color: G_700)),
+                              ...matchesForDate.map(
+                                (match) => Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: padding / 2),
+                                  child: matchItem(match, goToMatchDetails),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
         ),
       ),
     );

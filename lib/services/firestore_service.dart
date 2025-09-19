@@ -5,6 +5,7 @@ import 'package:fan_react/models/comment/comment.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:fan_react/models/user/user_profile.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -88,21 +89,38 @@ class FirestoreService {
       final currentReactionType =
           currentReactionDoc?.data()['reactionType'] as String?;
 
-      if (currentReactionDoc != null && currentReactionType != null) {
+      bool isCancellation = false;
+      if (currentReactionDoc != null && currentReactionType == reactionType) {
         transaction.delete(currentReactionDoc.reference);
-        reactions[currentReactionType] =
+        reactions[currentReactionType ?? ''] =
             (reactions[currentReactionType] ?? 0) - 1;
+        transaction.update(docRef, {'reactions': reactions});
+        isCancellation = true;
+      } else {
+        if (currentReactionDoc != null && currentReactionType != null) {
+          debugPrint('Removing existing reaction: $currentReactionType');
+          transaction.delete(currentReactionDoc.reference);
+          reactions[currentReactionType] =
+              (reactions[currentReactionType] ?? 0) - 1;
+        }
+
+        final newReactionRef = userReactionsCollection.doc();
+        transaction.set(newReactionRef, {
+          'userId': user?.uid,
+          'reactionType': reactionType,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        reactions[reactionType] = (reactions[reactionType] ?? 0) + 1;
+
+        transaction.update(docRef, {'reactions': reactions});
       }
 
-      final newReactionRef = userReactionsCollection.doc();
-      transaction.set(newReactionRef, {
-        'userId': user?.uid,
-        'reactionType': reactionType,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-      reactions[reactionType] = (reactions[reactionType] ?? 0) + 1;
-
-      transaction.update(docRef, {'reactions': reactions});
+      await checkAchievements(user!.uid, 'reaction',
+          matchId: matchId,
+          reactionType: reactionType,
+          isCancellation: isCancellation);
+    }).catchError((e) {
+      debugPrint('Transaction failed: $e');
     });
   }
 
@@ -255,25 +273,55 @@ class FirestoreService {
     });
   }
 
-  // Initialize achievements for a user with progress and streak
   Future<void> initializeAchievements(String userId) async {
-    final achievementsSnapshot = await achievementsCollection.get();
-    final batch = _firestore.batch();
-
-    for (var doc in achievementsSnapshot.docs) {
-      final achievement =
-          Achievement.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-      final userAchievementRef = userAchievementsCollection.doc(doc.id);
-      batch.set(
-          userAchievementRef,
-          {
-            ...achievement.toMap(),
-            'progress': 0,
-            'streak': 0,
-          },
-          SetOptions(merge: true));
+    if (FirebaseAuth.instance.currentUser == null) {
+      throw Exception('User must be authenticated to initialize achievements.');
     }
-    await batch.commit();
+
+    try {
+      final achievementsSnapshot = await achievementsCollection.get();
+      var batch = _firestore.batch();
+      int operationCount = 0;
+
+      final userAchievementsSnapshot = await userAchievementsCollection.get();
+      final existingAchievementIds =
+          userAchievementsSnapshot.docs.map((doc) => doc.id).toSet();
+
+      for (var doc in achievementsSnapshot.docs) {
+        final achievementId = doc.id;
+        if (!existingAchievementIds.contains(achievementId)) {
+          final achievement = Achievement.fromMap(
+              doc.data() as Map<String, dynamic>, achievementId);
+          final userAchievementRef =
+              userAchievementsCollection.doc(achievementId);
+          batch.set(
+            userAchievementRef,
+            {
+              ...achievement.toMap(),
+              'progress': 0,
+              'streak': 0,
+            },
+            SetOptions(merge: true),
+          );
+          operationCount++;
+        }
+        if (operationCount == 500) {
+          await batch.commit();
+          batch = _firestore.batch();
+          operationCount = 0;
+        }
+      }
+
+      if (operationCount > 0) {
+        await batch.commit();
+        debugPrint('Achievements initialized for user $userId.');
+      } else {
+        debugPrint('No new achievements to initialize for user $userId.');
+      }
+    } catch (e) {
+      debugPrint('Error initializing achievements for user $userId: $e');
+      rethrow;
+    }
   }
 
   Future<void> updateAchievementProgress(
@@ -293,10 +341,10 @@ class FirestoreService {
       final newProgress = (currentProgress + increment).clamp(0, targetValue);
 
       int newStreak = currentStreak;
-      if (isSequential && lastReaction == 'shocked') {
+      if (isSequential && lastReaction == 'shocked' && increment > 0) {
         newStreak = currentStreak + 1;
-      } else if (isSequential && lastReaction != 'shocked') {
-        newStreak = 0;
+      } else if (isSequential && increment < 0) {
+        newStreak = 0; // Reset streak on cancellation
       }
 
       transaction.update(userAchievementRef, {
@@ -309,8 +357,13 @@ class FirestoreService {
   }
 
   // Check and update achievements based on an event
-  Future<void> checkAchievements(String userId, String eventType,
-      {int matchId = 0, String reactionType = ''}) async {
+  Future<void> checkAchievements(
+    String userId,
+    String eventType, {
+    int matchId = 0,
+    String reactionType = '',
+    bool isCancellation = false,
+  }) async {
     final achievementsSnapshot = await achievementsCollection.get();
     for (var doc in achievementsSnapshot.docs) {
       final achievement =
@@ -320,16 +373,20 @@ class FirestoreService {
           if (eventType == 'reaction' &&
               achievement.name == 'Fan in Love' &&
               reactionType == 'loved') {
-            await updateAchievementProgress(userId, achievement.id, 1);
+            await updateAchievementProgress(
+                userId, achievement.id, isCancellation ? -1 : 1);
           } else if (eventType == 'reaction' &&
               achievement.name == 'Mind = Blown') {
-            await updateAchievementProgress(userId, achievement.id, 1,
+            await updateAchievementProgress(
+                userId, achievement.id, isCancellation ? -1 : 1,
                 isSequential: true, lastReaction: reactionType);
           } else if (eventType == 'reaction' &&
               achievement.name == 'Mood Swing') {
-            await updateAchievementProgress(userId, achievement.id, 1);
+            await updateAchievementProgress(
+                userId, achievement.id, isCancellation ? -1 : 1);
           } else if (eventType == 'reaction' &&
-              achievement.name == 'Cold Blooded') {
+              achievement.name == 'Cold Blooded' &&
+              !isCancellation) {
             final matchDoc =
                 await matchesCollection.doc(matchId.toString()).get();
             if (matchDoc.exists) {
@@ -342,7 +399,8 @@ class FirestoreService {
             }
           } else if (eventType == 'reaction' &&
               achievement.name == 'Reaction Master') {
-            await updateAchievementProgress(userId, achievement.id, 1);
+            await updateAchievementProgress(
+                userId, achievement.id, isCancellation ? -1 : 1);
           }
           break;
         case 'comment':

@@ -17,15 +17,15 @@ late BuildContext bContext;
 final FirestoreService firestoreService = FirestoreService();
 final ApiClient apiClient = ApiClient();
 
-final ValueNotifier selectedIndexGlobal = ValueNotifier(0);
-final ValueNotifier isLeagueSelected = ValueNotifier(false);
-final ValueNotifier selectedLeagueId = ValueNotifier(0);
+final ValueNotifier<int> selectedIndexGlobal = ValueNotifier(0);
+final ValueNotifier<bool> isLeagueSelected = ValueNotifier(false);
+final ValueNotifier<int> selectedLeagueId = ValueNotifier(0);
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 List<Match> allMatches = List<Match>.empty(growable: true);
 List<Match> selectedLeagueMatches = List.empty(growable: true);
-final ValueNotifier matchesWithActivities =
-    ValueNotifier(List<Match>.empty(growable: true));
+final ValueNotifier<List<Match>> matchesWithActivities =
+    ValueNotifier(List.empty(growable: true));
 Map<int, String> selectedReactions = {};
 bool isLoadingMatches = false;
 
