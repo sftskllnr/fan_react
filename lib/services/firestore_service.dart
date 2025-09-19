@@ -154,17 +154,59 @@ class FirestoreService {
       timestamp: DateTime.now(),
     );
 
+    // Fetch the "First Word" achievement document outside the transaction
+    final firstWordAchievement =
+        await achievementsCollection.doc('first_word').get();
+    if (!firstWordAchievement.exists) {
+      debugPrint('Warning: First Word achievement document does not exist.');
+    }
+
     await _firestore.runTransaction((transaction) async {
+      // Read: Check if this is the first comment
+      final commentSnapshot = await commentsCollection.limit(1).get();
+      final isFirstComment = commentSnapshot.docs.isEmpty;
+
+      // Read: Fetch the user's achievement progress
+      final userAchievementRef = userAchievementsCollection.doc('first_word');
+      final userAchievementSnapshot = await transaction.get(userAchievementRef);
+
+      // Write: Add the new comment
       final commentRef = commentsCollection.doc();
-      final commentSnapshot = await transaction.get(commentRef);
-      if (!commentSnapshot.exists) {
-        // Ensure this is a new comment
-        transaction.set(commentRef, {
-          ...comment.toMap(),
-          'timestamp': FieldValue.serverTimestamp(),
-        });
+      transaction.set(commentRef, {
+        ...comment.toMap(),
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Write: Update the "First Word" achievement if this is the first comment
+      if (isFirstComment && firstWordAchievement.exists) {
+        if (userAchievementSnapshot.exists) {
+          final data = userAchievementSnapshot.data() as Map<String, dynamic>;
+          final currentProgress = data['progress'] ?? 0;
+          final targetValue = data['targetValue'] as int;
+          final newProgress = (currentProgress + 1).clamp(0, targetValue);
+
+          transaction.update(userAchievementRef, {
+            'progress': newProgress,
+            'isUnlocked': newProgress >= targetValue,
+          });
+        } else {
+          // Initialize the achievement if it doesn't exist
+          final achievementData =
+              firstWordAchievement.data() as Map<String, dynamic>;
+          transaction.set(userAchievementRef, {
+            ...achievementData,
+            'progress': 1,
+            'streak': 0,
+            'isUnlocked': 1 >= (achievementData['targetValue'] as int),
+          });
+        }
       }
+    }).catchError((e) {
+      debugPrint('Error adding comment: $e');
+      throw e;
     });
+
+    await checkAchievements(userId, 'comment', matchId: matchId);
   }
 
   Future<void> deleteComment(
@@ -234,7 +276,7 @@ class FirestoreService {
     }
   }
 
-// Helper methods to check user activity
+  // Helper methods to check user activit
   Future<bool> _hasUserComments(int matchId, String userId) async {
     final commentsQuery = matchesCollection
         .doc(matchId.toString())
@@ -404,15 +446,7 @@ class FirestoreService {
           }
           break;
         case 'comment':
-          if (eventType == 'comment' && achievement.name == 'First Word') {
-            final commentsCollection = matchesCollection
-                .doc(matchId.toString())
-                .collection('comments');
-            final commentSnapshot = await commentsCollection.limit(1).get();
-            if (commentSnapshot.docs.isEmpty) {
-              await updateAchievementProgress(userId, achievement.id, 1);
-            }
-          } else if (eventType == 'comment' && achievement.name == 'Explorer') {
+          if (eventType == 'comment' && achievement.name == 'Explorer') {
             await updateLeagueInteraction(userId, matchId);
           } else if (eventType == 'comment' &&
               achievement.name == 'Comment Veteran') {
