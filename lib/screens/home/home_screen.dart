@@ -15,6 +15,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
+import 'package:smart_snackbars/enums/animate_from.dart';
+import 'package:smart_snackbars/smart_snackbars.dart';
 
 class HomeScreen extends StatefulWidget {
   final String? payload;
@@ -439,7 +441,7 @@ class _HomeScreen extends State<HomeScreen> {
                 body: IndexedStack(
                     index: selectedIndexGlobal.value, children: _listWidgets),
                 bottomNavigationBar: SizedBox(
-                  height: navBatHeight,
+                  height: navBarHeight,
                   child: BottomNavBar(
                       curentIndex: selectedIndexGlobal.value,
                       onTap: (index) => setState(() {
@@ -473,4 +475,29 @@ class _HomeScreen extends State<HomeScreen> {
           );
         });
   }
+}
+
+void showNoInternetSnackbar(BuildContext context, Function() onTap) {
+  SmartSnackBars.showTemplatedSnackbar(
+      context: context,
+      backgroundColor: SYSTEM_ONE,
+      persist: true,
+      animationCurve: Curves.ease,
+      animateFrom: AnimateFrom.fromBottom,
+      outerPadding: const EdgeInsets.symmetric(vertical: padding * 6),
+      borderRadius: BorderRadius.circular(0.0),
+      titleWidget:
+          Text(connectionError, style: size15bold.copyWith(color: G_100)),
+      subTitleWidget:
+          Text(checkYourInternet, style: size14medium.copyWith(color: G_100)),
+      trailing: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+            padding: const EdgeInsets.all(padding / 2),
+            decoration: BoxDecoration(
+                color: G_100,
+                borderRadius: BorderRadius.circular(buttonsRadius)),
+            child: Text(reload, style: size14semibold.copyWith(color: G_900))),
+      ));
 }

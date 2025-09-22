@@ -234,7 +234,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
               children: [
                 SizedBox(height: 20, width: 20, child: Image.asset(loved)),
                 const SizedBox(width: padding / 4),
-                Text(widget.match.reactions?['loved'].toString() ?? '',
+                Text(widget.match.reactions['loved'].toString(),
                     style: size12semibold),
               ],
             )),
@@ -252,7 +252,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   child: Image.asset(angry),
                 ),
                 const SizedBox(width: padding / 4),
-                Text(widget.match.reactions?['angry'].toString() ?? '',
+                Text(widget.match.reactions['angry'].toString(),
                     style: size12semibold),
               ],
             )),
@@ -270,7 +270,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   child: Image.asset(disappointed),
                 ),
                 const SizedBox(width: padding / 4),
-                Text(widget.match.reactions?['disappointed'].toString() ?? '',
+                Text(widget.match.reactions['disappointed'].toString(),
                     style: size12semibold),
               ],
             )),
@@ -284,7 +284,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
               children: [
                 SizedBox(height: 20, width: 20, child: Image.asset(cool)),
                 const SizedBox(width: padding / 4),
-                Text(widget.match.reactions?['cool'].toString() ?? '',
+                Text(widget.match.reactions['cool'].toString(),
                     style: size12semibold),
               ],
             )),
@@ -299,7 +299,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
               children: [
                 SizedBox(height: 20, width: 20, child: Image.asset(shocked)),
                 const SizedBox(width: padding / 4),
-                Text(widget.match.reactions?['shocked'].toString() ?? '',
+                Text(widget.match.reactions['shocked'].toString(),
                     style: size12semibold),
               ],
             )),
@@ -599,7 +599,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
               //
               return Container(
                 margin: const EdgeInsets.only(bottom: padding / 4),
-                padding: const EdgeInsets.all(padding / 2),
+                padding: const EdgeInsets.symmetric(
+                    vertical: padding / 2, horizontal: padding / 4),
                 decoration: BoxDecoration(
                     border: Border(bottom: BorderSide(color: G_400, width: 1))),
                 child: Column(
@@ -609,7 +610,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(match.homeTeam.name, style: size14semibold),
+                        SizedBox(
+                            width: screenWidth / 4,
+                            child: Text(match.homeTeam.name,
+                                textAlign: TextAlign.end,
+                                style: size14semibold)),
                         const SizedBox(width: padding / 2),
                         SizedBox(
                             height: 30,
@@ -624,7 +629,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                             width: 30,
                             child: Image.network(match.awayTeam.logo ?? '')),
                         const SizedBox(width: padding / 2),
-                        Text(match.awayTeam.name, style: size14semibold)
+                        SizedBox(
+                            width: screenWidth / 4,
+                            child: Text(match.awayTeam.name,
+                                textAlign: TextAlign.start,
+                                style: size14semibold))
                       ],
                     )
                   ],
@@ -719,11 +728,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                 child: matchStatics.isEmpty
                     ? Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                            LottieBuilder.asset(preloader,
-                                width: 100, height: 100),
-                            Text(loading, style: size15semibold)
-                          ])
+                        children: [Text(noStatistic, style: size15semibold)])
                     : statisticListView())
           ])
         ]));

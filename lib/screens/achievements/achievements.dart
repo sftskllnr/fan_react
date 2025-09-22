@@ -44,8 +44,8 @@ class _AchievementsState extends State<Achievements> {
           setState(() => _achievements = achievements);
           for (var achievement in achievements) {
             if (achievement.isUnlocked) {
-              // ScaffoldMessenger.of(context)
-              //     .showSnackBar(_snackBar(context, achievement.name, tapView));
+              // should be fixed
+              showAchivementSnackbar(context, achievement.name, tapView);
             }
           }
         }
@@ -77,50 +77,45 @@ class _AchievementsState extends State<Achievements> {
   }
 
   Widget achievItem(Achievement achievement, String svgPath, double textWidth) {
-    return InkWell(
-      onTap: () => showTemplatedSnackbar(context, achievement.name, tapView),
-      child: Container(
-        padding: const EdgeInsets.all(padding),
-        margin: const EdgeInsets.only(top: padding / 2),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(buttonsRadius),
-        ),
-        child: Row(
-          children: [
-            SvgPicture.asset(svgPath, width: 50, height: 50),
-            const SizedBox(width: padding / 2),
-            SizedBox(
-              width: textWidth,
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(achievement.name, style: size15semibold),
-                    Text(achievement.description,
-                        style: size14medium.copyWith(color: G_700))
-                  ]),
-            ),
-            const Spacer(),
-            achievement.percentage / 100 == 1
-                ? SizedBox(
-                    width: 50, height: 50, child: SvgPicture.asset(tickCircle))
-                : SizedBox(
-                    child: CircularPercentIndicator(
-                      radius: 25,
-                      lineWidth: padding / 4,
-                      backgroundColor: G_200,
-                      progressColor: ACCENT_PRIMARY,
-                      percent: achievement.percentage / 100 == 0
-                          ? 0.02
-                          : achievement.percentage / 100,
-                      center: Text(
-                          '${achievement.percentage.toStringAsFixed(0)}%',
-                          style:
-                              size12semibold.copyWith(color: ACCENT_PRIMARY)),
-                    ),
-                  )
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(padding),
+      margin: const EdgeInsets.only(top: padding / 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(buttonsRadius),
+      ),
+      child: Row(
+        children: [
+          SvgPicture.asset(svgPath, width: 50, height: 50),
+          const SizedBox(width: padding / 2),
+          SizedBox(
+            width: textWidth,
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(achievement.name, style: size15semibold),
+              Text(achievement.description,
+                  style: size14medium.copyWith(color: G_700))
+            ]),
+          ),
+          const Spacer(),
+          achievement.percentage / 100 == 1
+              ? SizedBox(
+                  width: 50, height: 50, child: SvgPicture.asset(tickCircle))
+              : SizedBox(
+                  child: CircularPercentIndicator(
+                    radius: 25,
+                    lineWidth: padding / 4,
+                    backgroundColor: G_200,
+                    progressColor: ACCENT_PRIMARY,
+                    percent: achievement.percentage / 100 == 0
+                        ? 0.02
+                        : achievement.percentage / 100,
+                    center: Text(
+                        '${achievement.percentage.toStringAsFixed(0)}%',
+                        style: size12semibold.copyWith(color: ACCENT_PRIMARY)),
+                  ),
+                )
+        ],
       ),
     );
   }
@@ -161,7 +156,7 @@ class _AchievementsState extends State<Achievements> {
   }
 }
 
-void showTemplatedSnackbar(
+void showAchivementSnackbar(
     BuildContext context, String achievementName, Function() onTap) {
   SmartSnackBars.showTemplatedSnackbar(
       context: context,

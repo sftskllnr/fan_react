@@ -94,6 +94,7 @@ String weReview =
 // HOME
 String ok = 'OK';
 String matches = 'Matches';
+String showMore = 'Show more';
 String history = 'History';
 String achievement = 'Achievement';
 String profile = 'Profile';
@@ -110,6 +111,8 @@ String resetChoice = 'Reset choice';
 String noResultFound = 'No results found';
 String resetToSee = 'Reset filter to see all matches';
 String loading = 'Loading...';
+String connectionError = 'Connectoin error';
+String checkYourInternet = 'Check your internet or try again later';
 
 // DETAILS MATCH
 String detailsMatch = 'Details Match';
@@ -126,6 +129,8 @@ String thisAction = 'This action cannot be undone.';
 String cancel = 'Cancel';
 String delete = 'Delete';
 String penalties = 'Penalties';
+String noStatistic = 'No statistic found';
+String reload = 'Reload';
 
 // HISTORY
 String noActivity = 'No activity yet';

@@ -8,12 +8,8 @@ class Profile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          matches,
-          style: size24bold,
-        ),
-      ),
+      appBar:
+          AppBar(centerTitle: false, title: Text(profile, style: size24bold)),
     );
   }
 }

@@ -28,6 +28,7 @@ final ValueNotifier<List<Match>> matchesWithActivities =
     ValueNotifier(List.empty(growable: true));
 Map<int, String> selectedReactions = {};
 bool isLoadingMatches = false;
+bool allPagesLoadedForDay = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

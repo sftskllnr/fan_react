@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
 import 'package:fan_react/main.dart';
 import 'package:fan_react/screens/details/match_details_screen.dart';
+import 'package:fan_react/screens/home/home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 
@@ -19,12 +22,54 @@ class Matches extends StatefulWidget {
 }
 
 class _MatchesState extends State<Matches> {
+  late StreamSubscription<InternetStatus> _subscription;
+  InternetStatus? _connectionStatus;
+  late ScrollController scrollController;
   int? _lastFetchedLeagueId;
+  DateTime _currentDate = DateTime.now().subtract(const Duration(days: 1));
+  int _offset = 0;
+  bool _showShowMoreButton = false;
 
   @override
   void initState() {
     super.initState();
+    scrollController = ScrollController();
+    scrollController.addListener(_scrollListener);
     _initializeMatches();
+
+    _subscription = InternetConnection().onStatusChange.listen((status) {
+      setState(() {
+        _connectionStatus = status;
+      });
+      if (_connectionStatus == InternetStatus.disconnected) {
+        if (mounted) {
+          showNoInternetSnackbar(context, _initializeMatches);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    scrollController.removeListener(_scrollListener);
+    scrollController.dispose();
+    _subscription.cancel();
+    super.dispose();
+  }
+
+  void _scrollListener() {
+    if (scrollController.position.pixels >=
+        scrollController.position.maxScrollExtent - 200) {
+      setState(() {
+        _showShowMoreButton = true;
+      });
+    } else if (_showShowMoreButton &&
+        scrollController.position.pixels <
+            scrollController.position.maxScrollExtent - 200) {
+      setState(() {
+        _showShowMoreButton = false;
+      });
+    }
   }
 
   void getLeagueMatches(int leagueId) async {
@@ -57,24 +102,66 @@ class _MatchesState extends State<Matches> {
   Future<void> _initializeMatches() async {
     setState(() => isLoadingMatches = true);
     try {
-      List<Match> apiMatches = await apiClient.getAllMatches();
-
+      List<Match> apiMatches =
+          await apiClient.getAllMatches(date: _currentDate, offset: _offset);
       await firestoreService.addMatchesList(apiMatches);
-
       final matchSnapshot = await firestoreService.matchesCollection.get();
       allMatches.clear();
       allMatches.addAll(matchSnapshot.docs.map((doc) => doc.data()).toList());
-
       await _updateReactionsForMatches(allMatches);
-
       await loadMatchActivities();
-
       setState(() => isLoadingMatches = false);
     } catch (e) {
       setState(() => isLoadingMatches = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to initialize matches: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> loadMoreMatches() async {
+    if (allPagesLoadedForDay) {
+      // If all pages for the current day are loaded, move to the previous day
+      _currentDate = _currentDate.subtract(const Duration(days: 1));
+      _offset = 0;
+      allPagesLoadedForDay = false;
+    } else {
+      _offset += 100;
+    }
+
+    setState(() => isLoadingMatches = true);
+    try {
+      List<Match> newMatches =
+          await apiClient.getAllMatches(date: _currentDate, offset: _offset);
+
+      if (newMatches.isEmpty && !allPagesLoadedForDay) {
+        // If no matches are returned but more pages are expected, try the next offset
+        _offset += 100;
+        newMatches =
+            await apiClient.getAllMatches(date: _currentDate, offset: _offset);
+      } else if (newMatches.isEmpty) {
+        // If no matches and all pages are loaded, move to the previous day
+        _currentDate = _currentDate.subtract(const Duration(days: 1));
+        _offset = 0;
+        allPagesLoadedForDay = false;
+        newMatches =
+            await apiClient.getAllMatches(date: _currentDate, offset: _offset);
+      }
+
+      await firestoreService.addMatchesList(newMatches);
+      final matchSnapshot = await firestoreService.matchesCollection.get();
+      allMatches.clear();
+      allMatches.addAll(matchSnapshot.docs.map((doc) => doc.data()).toList());
+      await _updateReactionsForMatches(allMatches);
+      await loadMatchActivities();
+      setState(() => isLoadingMatches = false);
+    } catch (e) {
+      setState(() => isLoadingMatches = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load more matches: $e')),
         );
       }
     }
@@ -116,7 +203,6 @@ class _MatchesState extends State<Matches> {
           selectedReactions[matchId] = reactionType;
         }
         setState(() {});
-
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           await firestoreService.checkAchievements(
@@ -140,7 +226,6 @@ class _MatchesState extends State<Matches> {
   Future<void> _updateReactionsForMatches(List<Match> matches) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     final reactionFutures = matches.map((match) async {
       for (final reactionType in [
         'loved',
@@ -193,7 +278,6 @@ class _MatchesState extends State<Matches> {
           final selectedReaction = selectedReactions[match.id];
           final currentMatch = snapshot.data ?? match;
           final currentReactions = currentMatch.reactions;
-
           return InkWell(
               onTap: () => onTap(match),
               child: Container(
@@ -442,30 +526,72 @@ class _MatchesState extends State<Matches> {
         });
   }
 
-  Widget allMatchesGroup() {
-    return ListView.builder(
-      itemCount: groupMatchesByDate(allMatches).length,
-      itemBuilder: (context, index) {
-        final groupedMatches = groupMatchesByDate(allMatches);
-        final dates = groupedMatches.keys.toList();
-        final date = dates[index];
-        final matchesForDate = groupedMatches[date]!;
-        return Padding(
-          padding: const EdgeInsets.only(top: padding / 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(date, style: size15semibold.copyWith(color: G_700)),
-              ...matchesForDate.map(
-                (match) => Padding(
-                  padding: const EdgeInsets.only(top: padding / 2),
-                  child: matchItem(match, goToMatchDetails),
+  Widget allMatchesGroup(
+      double appBarHeight, double screenHeight, double screenWidth) {
+    final safeAreaPadding = MediaQuery.paddingOf(context);
+    final usableScreenHeight =
+        screenHeight - safeAreaPadding.top - safeAreaPadding.bottom;
+
+    const double showMoreButtonHeight = padding * 4;
+
+    double listViewHeight = usableScreenHeight - appBarHeight - navBarHeight;
+    if (_showShowMoreButton) {
+      listViewHeight -= showMoreButtonHeight;
+    }
+
+    return Column(
+      children: [
+        SizedBox(
+          height: listViewHeight,
+          child: ListView.builder(
+            shrinkWrap: true,
+            controller: scrollController,
+            itemCount: groupMatchesByDate(allMatches).length,
+            itemBuilder: (context, index) {
+              final groupedMatches = groupMatchesByDate(allMatches);
+              final dates = groupedMatches.keys.toList();
+              final date = dates[index];
+              final matchesForDate = groupedMatches[date]!;
+              return Padding(
+                padding: const EdgeInsets.only(top: padding / 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(date, style: size15semibold.copyWith(color: G_700)),
+                    ...matchesForDate.map(
+                      (match) => Padding(
+                        padding: const EdgeInsets.only(top: padding / 2),
+                        child: matchItem(match, goToMatchDetails),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              );
+            },
           ),
-        );
-      },
+        ),
+        if (_showShowMoreButton)
+          InkWell(
+            onTap: loadMoreMatches,
+            child: Container(
+              width: screenWidth,
+              height: padding * 3,
+              padding: const EdgeInsets.all(padding),
+              margin: const EdgeInsets.only(top: padding / 2),
+              decoration: BoxDecoration(
+                  color: G_400,
+                  borderRadius: BorderRadius.circular(buttonsRadius)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(showMore, style: size15semibold),
+                  const SizedBox(width: padding / 2),
+                  Icon(Icons.arrow_downward_outlined, color: G_900, size: 17)
+                ],
+              ),
+            ),
+          )
+      ],
     );
   }
 
@@ -475,6 +601,7 @@ class _MatchesState extends State<Matches> {
     var yesterday = DateTime.now().subtract(const Duration(days: 1));
     String date = dateFormatBack.format(yesterday);
     double screenHeight = MediaQuery.sizeOf(context).height;
+    double screenWidth = MediaQuery.sizeOf(context).width;
 
     AppBar appBar = AppBar(
         centerTitle: false,
@@ -499,46 +626,68 @@ class _MatchesState extends State<Matches> {
       child: Scaffold(
         appBar: appBar,
         resizeToAvoidBottomInset: false,
-        body: ValueListenableBuilder(
-          valueListenable: selectedLeagueId,
-          builder: (context, leagueId, child) {
-            getLeagueMatches(leagueId);
-            return Container(
-              color: G_400,
-              padding: const EdgeInsets.symmetric(horizontal: padding),
-              height: screenHeight -
-                  appBar.preferredSize.height -
-                  padding * 2 -
-                  navBatHeight,
-              child: ValueListenableBuilder(
-                valueListenable: isLeagueSelected,
-                builder: (context, isSelected, child) {
-                  return isLoadingMatches
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                              LottieBuilder.asset(preloader,
-                                  width: 100, height: 100),
-                              Text(loading, style: size15semibold)
-                            ])
-                      : isSelected
-                          ? selectedLeagueMatches.isEmpty
-                              ? noResultsFound()
-                              : selectedMatchesGroup()
-                          : allMatches.isEmpty
-                              ? Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                      LottieBuilder.asset(preloader,
-                                          width: 100, height: 100),
-                                      Text(loading, style: size15semibold)
-                                    ])
-                              : allMatchesGroup();
-                },
-              ),
-            );
-          },
-        ),
+        body: Stack(alignment: Alignment.center, children: [
+          ValueListenableBuilder(
+            valueListenable: selectedLeagueId,
+            builder: (context, leagueId, child) {
+              getLeagueMatches(leagueId);
+              return Container(
+                color: G_200,
+                width: screenWidth,
+                height: screenHeight,
+                padding: const EdgeInsets.symmetric(horizontal: padding),
+                child: ValueListenableBuilder(
+                  valueListenable: isLeagueSelected,
+                  builder: (context, isSelected, child) {
+                    return isLoadingMatches
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.max,
+                            children: [
+                                LottieBuilder.asset(preloader,
+                                    width: 100, height: 100),
+                                Text(loading, style: size15semibold)
+                              ])
+                        : isSelected
+                            ? selectedLeagueMatches.isEmpty
+                                ? noResultsFound()
+                                : selectedMatchesGroup()
+                            : allMatches.isEmpty
+                                ? Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                        LottieBuilder.asset(preloader,
+                                            width: 100, height: 100),
+                                        Text(loading, style: size15semibold)
+                                      ])
+                                : allMatchesGroup(appBar.preferredSize.height,
+                                    screenHeight, screenWidth);
+                  },
+                ),
+              );
+            },
+          ),
+          Positioned(
+              bottom: padding * 2.5,
+              right: padding,
+              child: Offstage(
+                offstage: !_showShowMoreButton,
+                child: InkWell(
+                  onTap: () => scrollController.animateTo(
+                      duration: const Duration(seconds: 1),
+                      curve: Curves.decelerate,
+                      scrollController.position.minScrollExtent),
+                  child: Container(
+                    decoration:
+                        BoxDecoration(shape: BoxShape.circle, color: G_900),
+                    width: 50,
+                    height: 50,
+                    child: Icon(Icons.arrow_upward_outlined,
+                        color: G_100, size: 17),
+                  ),
+                ),
+              ))
+        ]),
       ),
     );
   }

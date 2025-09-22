@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:fan_react/main.dart';
 import 'package:fan_react/models/league/league_season.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:fan_react/models/match/match_by_id.dart';
+import 'package:fan_react/models/pagination/pagination.dart';
 import 'package:fan_react/models/statistic/match_statistic.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
@@ -20,19 +22,27 @@ class ApiClient {
     // 'x-rapidapi-key': 'dd9f256b-4d13-49d2-b927-9d6bbf49dcf6'
   };
 
-  Future<List<Match>> getAllMatches({int offset = 0}) async {
+  Future<List<Match>> getAllMatches(
+      {required DateTime date, int offset = 0}) async {
     DateFormat dateFormatBack = DateFormat('yyyy-MM-dd');
-    var yesterday = DateTime.now().subtract(const Duration(days: 1));
-    String date = dateFormatBack.format(yesterday);
+    String formattedDate = dateFormatBack.format(date);
 
     Response response;
+    Pagination pagination;
 
     try {
       response = await _dio.request(
-          '$_matchesBaseUrl?date=$date&timezone=Europe%2FLondon&season=2025&limit=100&offset=$offset',
+          '$_matchesBaseUrl?date=$formattedDate&timezone=Europe%2FLondon&season=2025&limit=100&offset=$offset',
           options: Options(method: 'GET', headers: header));
 
       if (response.statusCode == 200) {
+        pagination = Pagination.fromMap(response.data['pagination']);
+
+        if (pagination.offset + pagination.limit >= pagination.totalCount) {
+          allPagesLoadedForDay = true;
+        } else {
+          allPagesLoadedForDay = false;
+        }
         return compute(parseMatches, jsonEncode(response.data['data']));
       } else {
         return List<Match>.empty();
