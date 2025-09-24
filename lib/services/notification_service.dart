@@ -70,7 +70,7 @@ class NotificationService {
       if (status.isGranted && isChecked) {
         _savePermissionStatus();
         _scheduleInactiveNotification();
-        await AppSettings.openAppSettings(type: AppSettingsType.notification);
+        //await AppSettings.openAppSettings(type: AppSettingsType.notification);
       } else if (status.isDenied || status.isPermanentlyDenied && isChecked) {
         _savePermissionStatus();
       }
@@ -86,10 +86,12 @@ class NotificationService {
         if (!areEnabled && isChecked) {
           await AppSettings.openAppSettings(type: AppSettingsType.notification);
           _savePermissionStatus();
-        } else if (areEnabled && isChecked) {
-          await AppSettings.openAppSettings(type: AppSettingsType.notification);
-          _savePermissionStatus();
-        } else if (!areEnabled && !isChecked) {
+        }
+        // else if (areEnabled && isChecked) {
+        //   await AppSettings.openAppSettings(type: AppSettingsType.notification);
+        //   _savePermissionStatus();
+        // }
+        else if (!areEnabled && !isChecked) {
           await androidPlugin.requestNotificationsPermission();
           _savePermissionStatus();
         } else {

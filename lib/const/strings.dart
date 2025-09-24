@@ -55,6 +55,7 @@ String preloaderBack = 'assets/svg/preloader_back.svg';
 // png
 String firstOnboard = 'assets/png/first_onboard.png';
 String secondOnboard = 'assets/png/second_onboard.png';
+String ellipse = 'assets/png/ellipse.png';
 
 // lottie
 String preloader = 'assets/json/preloader.json';
@@ -174,7 +175,7 @@ String notifications = 'Notifications';
 String privacyPolicy = 'Privacy Policy';
 String shareApp = 'Share App';
 String deleteProfile = 'Delete profile';
-
+String setNewPhoto = 'Set a new photo';
 String mutedUsers = 'Muted users';
 String noMutedUsers = 'No muted users';
 String unblock = 'Unblock';
@@ -184,3 +185,7 @@ String enterYourName = 'Enter your name and add a profile photo if you wish.';
 String youWillStart = 'You\'ll start seeing this user\'s comments again';
 String thisNickname = 'This nickname is already in use. Try another one.';
 String googleUrl = 'https://google.com';
+String deleteYour = 'Delete your profile?';
+String thisNick = 'This nickname is already in use. Try another one.';
+String thisWill =
+    'This will permanently remove your profiles, posts and all data. Your can\'t undo this action';

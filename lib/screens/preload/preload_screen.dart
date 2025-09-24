@@ -30,8 +30,7 @@ class _PreloadScreen extends State<PreloadScreen> {
     Future.delayed(
         const Duration(seconds: 3),
         () => mounted
-            // change before release
-            ? isFirstLaunch == null
+            ? isFirstLaunch == null || isFirstLaunch == true
                 ? Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(
                         builder: (context) => const FirstOnboarding()),

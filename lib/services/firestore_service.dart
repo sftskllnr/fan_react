@@ -704,4 +704,128 @@ class FirestoreService {
       }
     });
   }
+
+  Future<void> deleteUserAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User must be authenticated to delete account.');
+    }
+
+    final userId = user.uid;
+
+    try {
+      WriteBatch batch = _firestore.batch();
+
+      final userProfileRef = usersCollection.doc(userId);
+      batch.delete(userProfileRef);
+
+      final achievementsSnapshot = await userAchievementsCollection.get();
+      for (var doc in achievementsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final loginHistorySnapshot = await userLoginHistoryCollection.get();
+      for (var doc in loginHistorySnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final reportsSnapshot = await userReportsCollection.get();
+      for (var doc in reportsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final reportedCommentsSnapshot =
+          await userReportedCommentsCollection.get();
+      for (var doc in reportedCommentsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final leagueInteractionsSnapshot =
+          await userLeagueInteractionsCollection.get();
+      for (var doc in leagueInteractionsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final matchesSnapshot = await matchesCollection.get();
+      for (var matchDoc in matchesSnapshot.docs) {
+        final commentsCollection = matchDoc.reference.collection('comments');
+        final commentsSnapshot =
+            await commentsCollection.where('userId', isEqualTo: userId).get();
+        for (var commentDoc in commentsSnapshot.docs) {
+          batch.delete(commentDoc.reference);
+        }
+
+        final reactionsCollection =
+            matchDoc.reference.collection('userReactions');
+        final reactionsSnapshot =
+            await reactionsCollection.where('userId', isEqualTo: userId).get();
+        for (var reactionDoc in reactionsSnapshot.docs) {
+          final reactionType = reactionDoc.data()['reactionType'] as String;
+          final matchRef = matchesCollection.doc(matchDoc.id);
+          final matchData = matchDoc.data();
+          final reactions = Map<String, int>.from(matchData.reactions);
+          reactions[reactionType] = (reactions[reactionType] ?? 1) - 1;
+          if (reactions[reactionType]! <= 0) {
+            reactions.remove(reactionType);
+          }
+          batch.update(matchRef, {'reactions': reactions});
+          batch.delete(reactionDoc.reference);
+        }
+      }
+
+      await batch.commit();
+
+      await user.delete();
+
+      debugPrint(
+          'User account and associated data deleted successfully for user $userId.');
+    } catch (e) {
+      debugPrint('Error deleting user account: $e');
+      if (e is FirebaseAuthException && e.code == 'requires-recent-login') {
+        throw Exception('Please re-authenticate to delete your account.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> editUserName(String newName) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return false;
+    }
+
+    final trimmedName = newName.trim();
+    if (trimmedName.isEmpty) {
+      return false;
+    }
+
+    final userId = user.uid;
+    final userProfileRef = usersCollection.doc(userId);
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(userProfileRef);
+        if (!snapshot.exists) {
+          return false;
+        }
+
+        final querySnapshot = await usersCollection
+            .where('name', isEqualTo: trimmedName)
+            .where(FieldPath.documentId, isNotEqualTo: userId)
+            .limit(1)
+            .get();
+        if (querySnapshot.docs.isNotEmpty) {
+          return false;
+        }
+        transaction.update(userProfileRef, {'name': trimmedName});
+      });
+
+      debugPrint(
+          'User name updated successfully to $trimmedName for user $userId.');
+      return true;
+    } catch (e) {
+      debugPrint('Error updating user name: $e');
+      rethrow;
+    }
+  }
 }

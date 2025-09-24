@@ -1,16 +1,20 @@
 import 'dart:async';
+import 'package:app_settings/app_settings.dart';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
 import 'package:fan_react/main.dart';
 import 'package:fan_react/models/user/user_profile.dart';
 import 'package:fan_react/screens/home/home_screen.dart';
+import 'package:fan_react/screens/onboarding/first_onboarding.dart';
 import 'package:fan_react/screens/profile/edit_profile_screen.dart';
 import 'package:fan_react/screens/profile/muted_users_screen.dart';
-import 'package:fan_react/services/notification_service.dart';
+import 'package:fan_react/singleton/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class Profile extends StatefulWidget {
@@ -50,8 +54,23 @@ class _ProfileState extends State<Profile> {
     });
   }
 
+  void share() {
+    Share.share(pickEmtion);
+  }
+
+  void deleteAccount() async {
+    var prefs = await SharedPrefsSingleton.getInstance();
+    await prefs.setBool('isFirstLaunch', true);
+    firestoreService.deleteUserAccount();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const FirstOnboarding()),
+          (Route<dynamic> route) => false);
+    }
+  }
+
   Future<void> initNotifications() async {
-    await NotificationService().init();
+    await AppSettings.openAppSettings(type: AppSettingsType.notification);
   }
 
   void goToMutedUsersScreen() {
@@ -59,9 +78,13 @@ class _ProfileState extends State<Profile> {
         MaterialPageRoute(builder: (builder) => const MutedUsersScreen()));
   }
 
-  void goToEditProfileScreen() {
-    Navigator.of(context).push(
-        MaterialPageRoute(builder: (builder) => const EditProfileScreen()));
+  void goToEditProfileScreen() async {
+    final result = await Navigator.of(context).push<bool>(MaterialPageRoute(
+        builder: (builder) =>
+            EditProfileScreen(userName: userProfile?.name ?? '')));
+    if (result == true) {
+      await getUserProfile();
+    }
   }
 
   Future<void> _launchUrl() async {
@@ -121,27 +144,53 @@ class _ProfileState extends State<Profile> {
           title: Text(profile, style: size24bold)),
       body: Container(
         decoration: BoxDecoration(color: G_200),
-        child: Column(
-          children: [
-            const SizedBox(height: padding * 2),
-            avaWidget(),
-            const SizedBox(height: padding * 2),
-            settingsItem(mutedUsers, goToMutedUsersScreen),
-            const SizedBox(height: padding / 2),
-            Divider(color: G_300, indent: padding * 4, endIndent: padding * 4),
-            const SizedBox(height: padding / 2),
-            settingsItem(notifications, initNotifications),
-            const SizedBox(height: padding / 2),
-            settingsItem(privacyPolicy, _launchUrl),
-            const SizedBox(height: padding / 2),
-            settingsItem(shareApp, () {}),
-            const SizedBox(height: padding / 2),
-            Divider(color: G_300, indent: padding * 4, endIndent: padding * 4),
-            const SizedBox(height: padding / 2),
-            settingsItem(deleteProfile, () {}),
-          ],
-        ),
+        child: Column(children: [
+          const SizedBox(height: padding * 2),
+          avaWidget(),
+          const SizedBox(height: padding * 2),
+          settingsItem(mutedUsers, goToMutedUsersScreen),
+          const SizedBox(height: padding / 2),
+          Divider(color: G_300, indent: padding * 4, endIndent: padding * 4),
+          const SizedBox(height: padding / 2),
+          settingsItem(notifications, initNotifications),
+          const SizedBox(height: padding / 2),
+          settingsItem(privacyPolicy, _launchUrl),
+          const SizedBox(height: padding / 2),
+          settingsItem(shareApp, share),
+          const SizedBox(height: padding / 2),
+          Divider(color: G_300, indent: padding * 4, endIndent: padding * 4),
+          const SizedBox(height: padding / 2),
+          settingsItem(
+              deleteProfile, () => showDeleteAccountAlert(context, userProfile))
+        ]),
       ),
     );
+  }
+
+  void showDeleteAccountAlert(
+      BuildContext context, UserProfile? userProfile) async {
+    return await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (BuildContext context) {
+          return CupertinoAlertDialog(
+              title: Text(deleteYour, style: size18semibold),
+              content: Text(thisWill, style: size14medium),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text(cancel,
+                        style: size15medium.copyWith(
+                            color: ACCENT_PRIMARY, fontSize: 17))),
+                TextButton(
+                    onPressed: () {
+                      deleteAccount();
+                      Navigator.of(context).pop();
+                    },
+                    child: Text(delete,
+                        style: size15medium.copyWith(
+                            color: SYSTEM_ONE, fontSize: 17)))
+              ]);
+        });
   }
 }
