@@ -569,7 +569,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                                               Text(comment['commentText'],
                                                   style: size15medium)
                                             ])),
-                                        GestureDetector(
+                                        InkWell(
                                             key: _commentKeys[originalIndex],
                                             onTap: () => isAuthor
                                                 ? showDeleteCommentAlert(

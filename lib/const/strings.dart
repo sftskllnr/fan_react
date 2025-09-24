@@ -165,6 +165,22 @@ List<String> achievementsListSvg = [
   moodSwing,
   reactionMaster
 ];
-
 String newAchievUnlock = 'New achievement unlocked';
 String view = 'View';
+
+// PROFILE
+String editProfile = 'Edit profile';
+String notifications = 'Notifications';
+String privacyPolicy = 'Privacy Policy';
+String shareApp = 'Share App';
+String deleteProfile = 'Delete profile';
+
+String mutedUsers = 'Muted users';
+String noMutedUsers = 'No muted users';
+String unblock = 'Unblock';
+String userName = 'Username';
+String saveChanges = 'Save changes';
+String enterYourName = 'Enter your name and add a profile photo if you wish.';
+String youWillStart = 'You\'ll start seeing this user\'s comments again';
+String thisNickname = 'This nickname is already in use. Try another one.';
+String googleUrl = 'https://google.com';

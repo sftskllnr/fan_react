@@ -6,7 +6,6 @@ import 'package:fan_react/singleton/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -65,12 +64,13 @@ class NotificationService {
       }
 
       if (isChecked) {
-        // await AppSettings.openAppSettings(type: AppSettingsType.notification);
+        //await AppSettings.openAppSettings(type: AppSettingsType.notification);
         _savePermissionStatus();
       }
       if (status.isGranted && isChecked) {
         _savePermissionStatus();
         _scheduleInactiveNotification();
+        await AppSettings.openAppSettings(type: AppSettingsType.notification);
       } else if (status.isDenied || status.isPermanentlyDenied && isChecked) {
         _savePermissionStatus();
       }
@@ -84,6 +84,9 @@ class NotificationService {
           return;
         }
         if (!areEnabled && isChecked) {
+          await AppSettings.openAppSettings(type: AppSettingsType.notification);
+          _savePermissionStatus();
+        } else if (areEnabled && isChecked) {
           await AppSettings.openAppSettings(type: AppSettingsType.notification);
           _savePermissionStatus();
         } else if (!areEnabled && !isChecked) {

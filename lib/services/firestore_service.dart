@@ -45,6 +45,52 @@ class FirestoreService {
       .doc(user?.uid)
       .collection('reportedComments');
 
+  Future<List<UserProfile>> getBlockedUsers() async {
+    if (user == null) {
+      throw Exception('User must be authenticated to retrieve blocked users.');
+    }
+
+    try {
+      final snapshot = await userReportsCollection.get();
+      final blockedUserIds = snapshot.docs
+          .map((doc) =>
+              (doc.data() as Map<String, dynamic>)['reportedUserId'] as String)
+          .toList();
+
+      if (blockedUserIds.isEmpty) {
+        return [];
+      }
+
+      final blockedUsers = await Future.wait(
+        blockedUserIds.map((userId) async {
+          final userProfile = await getUserProfile(userId);
+          return userProfile;
+        }),
+      );
+
+      return blockedUsers.whereType<UserProfile>().toList();
+    } catch (e) {
+      debugPrint('Error fetching blocked users: $e');
+      return [];
+    }
+  }
+
+  Future<void> unblockUser(String blockedUserId) async {
+    if (user == null) {
+      throw Exception('User must be authenticated to unblock a user.');
+    }
+
+    final reportRef = userReportsCollection.doc(blockedUserId);
+    final snapshot = await reportRef.get();
+
+    if (!snapshot.exists) {
+      throw Exception(
+          'User $blockedUserId is not blocked by the current user.');
+    }
+
+    await reportRef.delete();
+  }
+
   Future<void> reportComment(
       String matchId, String commentId, String userId) async {
     if (user == null) {
