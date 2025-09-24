@@ -37,14 +37,15 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   List<MatchStatistic> matchStatics = List.empty(growable: true);
   List<bool> homeTeamResults = List.empty(growable: true);
   List<bool> awayTeamResults = List.empty(growable: true);
+  List<String> reportedCommentIds = List.empty(growable: true);
+
   bool showHeaders = true;
   bool isSubmittingComment = false;
-
-  int? _selectedCommentIndex;
   final Map<int, GlobalKey> _commentKeys = {};
   String? _currentDialogTag;
   String? _reportedUserId;
-  int? selectedIndex;
+  int? selectedUserIndex;
+  int? selectedCommentIndex;
 
   @override
   void initState() {
@@ -61,6 +62,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       getTeamResults(awayTeamMatches, widget.match.awayTeam.id, false);
     });
 
+    fetchReportedCommentIds();
     getMatchStatistic(widget.match.id);
     getH2hMatches();
   }
@@ -95,6 +97,15 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       isHome ? homeTeamResults.add(isWin) : awayTeamResults.add(isWin);
     }
     setState(() {});
+  }
+
+  Future<void> fetchReportedCommentIds() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      reportedCommentIds =
+          await firestoreService.getReportedCommentIds(user.uid);
+      setState(() {});
+    }
   }
 
   Future<void> sendComment() async {
@@ -179,9 +190,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     }
   }
 
-  void reportUser(String reportedUserId, int index) async {
+  void _reportUser(String reportedUserId, int index) async {
     setState(() {
-      selectedIndex = index;
+      selectedUserIndex = index;
       _reportedUserId = reportedUserId;
     });
     if (mounted) Navigator.pop(context);
@@ -190,7 +201,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       await firestoreService.reportUser(reportedUserId);
       if (mounted) {
         setState(() {
-          selectedIndex = index;
+          selectedUserIndex = index;
           _reportedUserId = null;
         });
       }
@@ -200,10 +211,40 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Failed to report user.')));
         setState(() {
-          selectedIndex = index;
+          selectedUserIndex = index;
           _reportedUserId = null;
         });
       }
+    }
+  }
+
+  Future<void> _reportComment(String commentId, int index) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please sign in to report a comment.')));
+      return;
+    }
+
+    try {
+      setState(() => selectedCommentIndex = index);
+      await Future.delayed(const Duration(seconds: 3));
+      await firestoreService.reportComment(
+          widget.match.id.toString(), commentId, user.uid);
+      reportedCommentIds.add(commentId);
+      setState(() {});
+    } catch (e) {
+      debugPrint('Error reporting comment: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to report comment.')));
+      }
+    } finally {
+      // Delay to show reportCommentWidget briefly
+      await Future.delayed(const Duration(seconds: 3));
+      setState(() {
+        selectedCommentIndex = null;
+      });
     }
   }
 
@@ -255,7 +296,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                             color: Colors.blue, fontSize: 17))),
                 TextButton(
                     onPressed: () {
-                      reportUser(currentUserId ?? '', index);
+                      _reportUser(currentUserId ?? '', index);
                     },
                     child: Text(block,
                         style: size15medium.copyWith(
@@ -443,6 +484,14 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         }
 
         final listComments = snapshot.data ?? [];
+        final filteredComments = listComments
+            .asMap()
+            .entries
+            .where((entry) =>
+                !reportedCommentIds.contains(entry.value['commentId']))
+            .map((entry) => MapEntry(entry.key, entry.value))
+            .toList();
+
         if (listComments.isEmpty) {
           return Column(
             children: [
@@ -475,10 +524,12 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                         : minPanelHeight - inputContainerHeight,
                 child: ListView.builder(
                     padding: const EdgeInsets.only(top: padding),
-                    itemCount: listComments.length,
+                    itemCount: filteredComments.length,
                     controller: scrollController,
                     itemBuilder: (context, index) {
-                      final comment = listComments[index];
+                      final entry = filteredComments[index];
+                      final originalIndex = entry.key;
+                      final comment = entry.value;
                       final userId = comment['userId'];
                       final commentId = comment['commentId'];
                       final isAuthor = currentUserId == comment['userId'];
@@ -486,56 +537,57 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       final isReportedUser =
                           comment['userId'] == _reportedUserId;
 
-                      _commentKeys[index] ??= GlobalKey();
+                      _commentKeys[originalIndex] ??= GlobalKey();
 
-                      return isReportedUser && selectedIndex == index
+                      return isReportedUser &&
+                              selectedUserIndex == originalIndex
                           ? reportUserWidget()
-                          : Container(
-                              color: G_100,
-                              padding:
-                                  const EdgeInsets.only(bottom: padding / 2),
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: padding),
-                              child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    CircleAvatar(
-                                        radius: 20,
-                                        backgroundImage: NetworkImage(
-                                            'https://i.pravatar.cc/150?img=$index')),
-                                    const SizedBox(width: padding / 2),
-                                    Expanded(
-                                        child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                          Text('${comment['userName']}',
-                                              style: size14semibold),
-                                          Text(comment['commentText'],
-                                              style: size15medium)
-                                        ])),
-                                    GestureDetector(
-                                        key: _commentKeys[index],
-                                        onTap: () => isAuthor
-                                            ? showDeleteCommentAlert(context,
-                                                commentId, currentUserId)
-                                            : {
-                                                setState(() =>
-                                                    _selectedCommentIndex =
-                                                        index),
-                                                _showCommentDialog(
+                          : selectedCommentIndex == originalIndex
+                              ? reportCommentWidget()
+                              : Container(
+                                  color: G_100,
+                                  padding: const EdgeInsets.only(
+                                      bottom: padding / 2),
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: padding),
+                                  child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        CircleAvatar(
+                                            radius: 20,
+                                            backgroundImage: NetworkImage(
+                                                'https://i.pravatar.cc/150?img=$originalIndex')),
+                                        const SizedBox(width: padding / 2),
+                                        Expanded(
+                                            child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                              Text('${comment['userName']}',
+                                                  style: size14semibold),
+                                              Text(comment['commentText'],
+                                                  style: size15medium)
+                                            ])),
+                                        GestureDetector(
+                                            key: _commentKeys[originalIndex],
+                                            onTap: () => isAuthor
+                                                ? showDeleteCommentAlert(
+                                                    context,
+                                                    commentId,
+                                                    currentUserId)
+                                                : _showCommentDialog(
                                                     index,
                                                     listComments,
                                                     userId,
                                                     commentId,
-                                                    userName)
-                                              },
-                                        child: isAuthor
-                                            ? SvgPicture.asset(trash,
-                                                width: 20, height: 20)
-                                            : Icon(Icons.more_horiz,
-                                                color: G_900))
-                                  ]));
+                                                    userName),
+                                            child: isAuthor
+                                                ? SvgPicture.asset(trash,
+                                                    width: 20, height: 20)
+                                                : Icon(Icons.more_horiz,
+                                                    color: G_900))
+                                      ]));
                     })),
             _buildCommentInput(textFieldWidth, inputContainerHeight),
           ],
@@ -626,6 +678,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                                                   _showActionSheet(
                                                       parentContext,
                                                       userId,
+                                                      commentId,
                                                       index)
                                               },
                                           child: Row(children: [
@@ -661,7 +714,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     }
   }
 
-  void _showActionSheet(BuildContext context, String userId, int index) {
+  void _showActionSheet(
+      BuildContext context, String userId, String commentId, int index) {
     showCupertinoModalPopup<void>(
       context: context,
       builder: (BuildContext context) => CupertinoActionSheet(
@@ -669,29 +723,24 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         message: Text(tellUs),
         actions: <CupertinoActionSheetAction>[
           CupertinoActionSheetAction(
-              onPressed: () => {
-                    // report comment
-                  },
+              onPressed: () =>
+                  {_reportComment(commentId, index), Navigator.pop(context)},
               child: Text(spam, style: TextStyle(color: ACCENT_PRIMARY))),
           CupertinoActionSheetAction(
-              onPressed: () => {
-                    // report comment
-                  },
+              onPressed: () =>
+                  {_reportComment(commentId, index), Navigator.pop(context)},
               child: Text(abusive, style: TextStyle(color: ACCENT_PRIMARY))),
           CupertinoActionSheetAction(
-              onPressed: () => {
-                    // report comment
-                  },
+              onPressed: () =>
+                  {_reportComment(commentId, index), Navigator.pop(context)},
               child: Text(falseInfo, style: TextStyle(color: ACCENT_PRIMARY))),
           CupertinoActionSheetAction(
-              onPressed: () => {
-                    // report comment
-                  },
+              onPressed: () =>
+                  {_reportComment(commentId, index), Navigator.pop(context)},
               child: Text(harassment, style: TextStyle(color: ACCENT_PRIMARY))),
           CupertinoActionSheetAction(
-              onPressed: () => {
-                    // report comment
-                  },
+              onPressed: () =>
+                  {_reportComment(commentId, index), Navigator.pop(context)},
               child: Text(other, style: TextStyle(color: ACCENT_PRIMARY))),
         ],
         cancelButton: CupertinoActionSheetAction(

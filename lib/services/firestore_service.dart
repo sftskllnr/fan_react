@@ -40,6 +40,43 @@ class FirestoreService {
   CollectionReference get userReportsCollection =>
       _firestore.collection('users').doc(user?.uid).collection('reportedUsers');
 
+  CollectionReference get userReportedCommentsCollection => _firestore
+      .collection('users')
+      .doc(user?.uid)
+      .collection('reportedComments');
+
+  Future<void> reportComment(
+      String matchId, String commentId, String userId) async {
+    if (user == null) {
+      throw Exception('User must be authenticated to report a comment.');
+    }
+
+    final reportRef = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('reportedComments')
+        .doc(commentId);
+    await reportRef.set({
+      'matchId': matchId,
+      'commentId': commentId,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<List<String>> getReportedCommentIds(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('reportedComments')
+          .get();
+      return snapshot.docs.map((doc) => doc.id).toList();
+    } catch (e) {
+      debugPrint('Error fetching reported comments: $e');
+      return [];
+    }
+  }
+
   Future<void> addMatchesList(List<Match> matches) async {
     final existingIds = (await matchesCollection.limit(1).get())
         .docs
