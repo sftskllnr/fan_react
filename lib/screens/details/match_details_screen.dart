@@ -5,6 +5,7 @@ import 'package:fan_react/main.dart';
 import 'package:fan_react/models/statistic/match_statistic.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:intl/intl.dart';
@@ -38,6 +39,12 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   List<bool> awayTeamResults = List.empty(growable: true);
   bool showHeaders = true;
   bool isSubmittingComment = false;
+
+  int? _selectedCommentIndex;
+  final Map<int, GlobalKey> _commentKeys = {};
+  String? _currentDialogTag;
+  String? _reportedUserId;
+  int? selectedIndex;
 
   @override
   void initState() {
@@ -102,6 +109,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     if (commentText.isNotEmpty && commentText.length <= 140) {
       setState(() {
         isSubmittingComment = true;
+        _commentController.clear();
       });
       _focusNode.unfocus();
       _panelController.close();
@@ -111,7 +119,6 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
           user.uid,
           commentText,
         );
-        _commentController.clear();
         await firestoreService.checkAchievements(user.uid, 'comment',
             matchId: widget.match.id);
       } catch (e) {
@@ -172,7 +179,35 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     }
   }
 
-  void showClearDataAlert(
+  void reportUser(String reportedUserId, int index) async {
+    setState(() {
+      selectedIndex = index;
+      _reportedUserId = reportedUserId;
+    });
+    if (mounted) Navigator.pop(context);
+    try {
+      await Future.delayed(const Duration(seconds: 3));
+      await firestoreService.reportUser(reportedUserId);
+      if (mounted) {
+        setState(() {
+          selectedIndex = index;
+          _reportedUserId = null;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error reporting user: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to report user.')));
+        setState(() {
+          selectedIndex = index;
+          _reportedUserId = null;
+        });
+      }
+    }
+  }
+
+  void showDeleteCommentAlert(
       BuildContext context, String commentId, String? currentUserId) async {
     _focusNode.unfocus();
     _panelController.close();
@@ -195,6 +230,34 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       Navigator.of(context).pop();
                     },
                     child: Text(delete,
+                        style: size15medium.copyWith(
+                            color: Colors.red, fontSize: 17)))
+              ]);
+        });
+  }
+
+  void showBlockUserAlert(BuildContext context, String commentId,
+      String? currentUserId, String userName, int index) async {
+    _focusNode.unfocus();
+    _panelController.close();
+    return await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (BuildContext context) {
+          return CupertinoAlertDialog(
+              title: Text('$block $userName?', style: size18semibold),
+              content: Text(allCommentsFrom, style: size14medium),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text(cancel,
+                        style: size15medium.copyWith(
+                            color: Colors.blue, fontSize: 17))),
+                TextButton(
+                    onPressed: () {
+                      reportUser(currentUserId ?? '', index);
+                    },
+                    child: Text(block,
                         style: size15medium.copyWith(
                             color: Colors.red, fontSize: 17)))
               ]);
@@ -335,8 +398,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     );
   }
 
-  Widget commentsWidget(
-      double screenHeight, double screenWidth, double minPanelHeight) {
+  Widget commentsWidget(double screenHeight, double screenWidth,
+      double minPanelHeight, ScrollController scrollController) {
     double textFieldWidth =
         screenWidth - padding * 2 - padding / 2 - padding * 3;
     double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
@@ -345,81 +408,17 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     double listViewHeight = padding * 18;
 
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: firestoreService.matchesCollection
-          .doc(widget.match.id.toString())
-          .collection('comments')
-          .orderBy('timestamp', descending: false)
-          .snapshots()
-          .map((snapshot) => snapshot.docs.map((doc) {
-                final data = doc.data();
-                data['commentId'] = doc.id;
-                return data;
-              }).toList()),
+      stream: firestoreService.getCommentsMatch(widget.match.id),
       builder: (context, snapshot) {
         if (isSubmittingComment) {
-          return Column(
-            children: [
-              SizedBox(
-                  height: _focusNode.hasFocus
-                      ? screenHeight - padding * 16 - keyboardHeight
-                      : screenHeight - padding * 21 - inputContainerHeight,
-                  child:
-                      LottieBuilder.asset(preloader, width: 100, height: 100)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: padding),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                        width: textFieldWidth,
-                        child: TextField(
-                            controller: _commentController,
-                            focusNode: _focusNode,
-                            onTap: () {
-                              _focusNode.requestFocus();
-                              _panelController.open();
-                            },
-                            onChanged: (value) => setState(() {}),
-                            expands: _commentController.text.length > 25
-                                ? true
-                                : false,
-                            maxLines:
-                                _commentController.text.length > 25 ? null : 1,
-                            cursorColor: ACCENT_PRIMARY,
-                            decoration: InputDecoration(
-                                hintText: whatDoYouThink,
-                                hintStyle: size15medium.copyWith(color: G_600),
-                                contentPadding:
-                                    const EdgeInsets.all(padding * 0.8),
-                                fillColor: G_200,
-                                filled: true,
-                                enabledBorder: OutlineInputBorder(
-                                    borderSide: BorderSide(color: G_400)),
-                                focusedBorder: OutlineInputBorder(
-                                    borderSide: BorderSide(color: G_400))))),
-                    const SizedBox(width: padding / 2),
-                    InkWell(
-                      onTap: () => sendComment(),
-                      child: Container(
-                        width: padding * 3,
-                        height: padding * 3,
-                        decoration: BoxDecoration(
-                            color: _commentController.text.isNotEmpty
-                                ? ACCENT_PRIMARY
-                                : G_600,
-                            borderRadius: BorderRadius.circular(buttonsRadius)),
-                        child: SvgPicture.asset(
-                            _commentController.text.isNotEmpty
-                                ? sendActive
-                                : sendDisabled),
-                      ),
-                    )
-                  ],
-                ),
-              ),
-            ],
-          );
+          return Column(children: [
+            SizedBox(
+                height: _focusNode.hasFocus
+                    ? screenHeight - padding * 16 - keyboardHeight
+                    : screenHeight - padding * 21 - inputContainerHeight,
+                child: LottieBuilder.asset(preloader, width: 100, height: 100)),
+            _buildCommentInput(textFieldWidth, inputContainerHeight)
+          ]);
         }
 
         if (snapshot.hasError) {
@@ -458,7 +457,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       SizedBox(height: (screenHeight - padding * 21) / 3),
                       Text(noCommentsYet, style: size15semibold),
                       Text(startConverstion,
-                          style: size14medium.copyWith(color: G_700))
+                          style: size14medium.copyWith(color: G_700)),
                     ],
                   )),
               _buildCommentInput(textFieldWidth, inputContainerHeight),
@@ -469,54 +468,283 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         return Column(
           children: [
             SizedBox(
-              height: _focusNode.hasFocus
-                  ? screenHeight - padding * 18 - keyboardHeight
-                  : !showHeaders
-                      ? screenHeight - listViewHeight
-                      : minPanelHeight - inputContainerHeight,
-              child: ListView.builder(
-                padding: const EdgeInsets.only(top: padding),
-                itemCount: listComments.length,
-                itemBuilder: (context, index) {
-                  final comment = listComments[index];
-                  final commentId = comment['commentId'];
-                  final isAuthor = currentUserId == comment['userId'];
-                  return Container(
-                    padding: const EdgeInsets.only(bottom: padding / 2),
-                    margin: const EdgeInsets.symmetric(horizontal: padding),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                            radius: 20,
-                            backgroundImage: NetworkImage(
-                                'https://i.pravatar.cc/150?img=$index')),
-                        const SizedBox(width: padding / 2),
-                        Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                              Text('${comment['userName']}',
-                                  style: size14semibold),
-                              Text(comment['commentText'], style: size15medium),
-                            ])),
-                        InkWell(
-                          onTap: () => showClearDataAlert(
-                              context, commentId, currentUserId),
-                          child: isAuthor
-                              ? SvgPicture.asset(trash, width: 20, height: 20)
-                              : Icon(Icons.more_horiz, color: G_900),
-                        )
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
+                height: _focusNode.hasFocus
+                    ? screenHeight - padding * 18 - keyboardHeight
+                    : !showHeaders
+                        ? screenHeight - listViewHeight
+                        : minPanelHeight - inputContainerHeight,
+                child: ListView.builder(
+                    padding: const EdgeInsets.only(top: padding),
+                    itemCount: listComments.length,
+                    controller: scrollController,
+                    itemBuilder: (context, index) {
+                      final comment = listComments[index];
+                      final userId = comment['userId'];
+                      final commentId = comment['commentId'];
+                      final isAuthor = currentUserId == comment['userId'];
+                      final userName = comment['userName'];
+                      final isReportedUser =
+                          comment['userId'] == _reportedUserId;
+
+                      _commentKeys[index] ??= GlobalKey();
+
+                      return isReportedUser && selectedIndex == index
+                          ? reportUserWidget()
+                          : Container(
+                              color: G_100,
+                              padding:
+                                  const EdgeInsets.only(bottom: padding / 2),
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: padding),
+                              child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                        radius: 20,
+                                        backgroundImage: NetworkImage(
+                                            'https://i.pravatar.cc/150?img=$index')),
+                                    const SizedBox(width: padding / 2),
+                                    Expanded(
+                                        child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                          Text('${comment['userName']}',
+                                              style: size14semibold),
+                                          Text(comment['commentText'],
+                                              style: size15medium)
+                                        ])),
+                                    GestureDetector(
+                                        key: _commentKeys[index],
+                                        onTap: () => isAuthor
+                                            ? showDeleteCommentAlert(context,
+                                                commentId, currentUserId)
+                                            : {
+                                                setState(() =>
+                                                    _selectedCommentIndex =
+                                                        index),
+                                                _showCommentDialog(
+                                                    index,
+                                                    listComments,
+                                                    userId,
+                                                    commentId,
+                                                    userName)
+                                              },
+                                        child: isAuthor
+                                            ? SvgPicture.asset(trash,
+                                                width: 20, height: 20)
+                                            : Icon(Icons.more_horiz,
+                                                color: G_900))
+                                  ]));
+                    })),
             _buildCommentInput(textFieldWidth, inputContainerHeight),
           ],
         );
       },
+    );
+  }
+
+  void _showCommentDialog(int index, List<Map<String, dynamic>> listComments,
+      String userId, String commentId, String userName) async {
+    final RenderBox? renderBox =
+        _commentKeys[index]?.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      final Offset position = renderBox.localToGlobal(Offset.zero);
+      _currentDialogTag = 'comment_dialog_$index';
+
+      final parentContext = context;
+
+      SmartDialog.show(
+          tag: _currentDialogTag,
+          builder: (_) {
+            return InkWell(
+                onTap: () async {
+                  if (_currentDialogTag != null) {
+                    await SmartDialog.dismiss(tag: _currentDialogTag);
+                    _currentDialogTag = null;
+                  }
+                },
+                child: Container(
+                    width: double.infinity,
+                    height: double.infinity,
+                    decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: HINT_COLOR),
+                    child: Stack(
+                        alignment: AlignmentDirectional.center,
+                        children: [
+                          Builder(builder: (context) {
+                            aContext = context;
+                            return Positioned(
+                                top: position.dy - padding,
+                                child: Container(
+                                    width: MediaQuery.sizeOf(context).width,
+                                    padding: const EdgeInsets.all(padding / 2),
+                                    decoration: BoxDecoration(color: G_100),
+                                    child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
+                                        children: [
+                                          CircleAvatar(
+                                              radius: 20,
+                                              backgroundImage: NetworkImage(
+                                                  'https://i.pravatar.cc/150?img=$index')),
+                                          const SizedBox(width: padding / 2),
+                                          Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                    '${listComments[index]['userName']}',
+                                                    style: size14semibold),
+                                                Text(
+                                                    listComments[index]
+                                                        ['commentText'],
+                                                    style: size15medium)
+                                              ]),
+                                          const Spacer(),
+                                          Icon(Icons.more_horiz, color: G_900)
+                                        ])));
+                          }),
+                          Builder(builder: (context) {
+                            bContext = context;
+                            return Positioned(
+                                top: position.dy + padding * 4,
+                                right: padding,
+                                child: Container(
+                                    padding: const EdgeInsets.all(padding / 2),
+                                    decoration: BoxDecoration(
+                                        color: G_100,
+                                        borderRadius: BorderRadius.circular(
+                                            buttonsRadius)),
+                                    child: Column(children: [
+                                      InkWell(
+                                          onTap: () async => {
+                                                await SmartDialog.dismiss(
+                                                    tag: _currentDialogTag),
+                                                if (parentContext.mounted)
+                                                  _showActionSheet(
+                                                      parentContext,
+                                                      userId,
+                                                      index)
+                                              },
+                                          child: Row(children: [
+                                            Text(reportComment,
+                                                style: size15semibold.copyWith(
+                                                    color: SYSTEM_ONE)),
+                                            const SizedBox(width: padding * 2),
+                                            SvgPicture.asset(chatClose)
+                                          ])),
+                                      const SizedBox(height: padding),
+                                      InkWell(
+                                          onTap: () async => {
+                                                await SmartDialog.dismiss(
+                                                    tag: _currentDialogTag),
+                                                if (parentContext.mounted)
+                                                  showBlockUserAlert(
+                                                      parentContext,
+                                                      commentId,
+                                                      userId,
+                                                      userName,
+                                                      index)
+                                              },
+                                          child: Row(children: [
+                                            Text('$blockUser                 ',
+                                                style: size15semibold.copyWith(
+                                                    color: SYSTEM_ONE)),
+                                            SvgPicture.asset(circle)
+                                          ]))
+                                    ])));
+                          })
+                        ])));
+          });
+    }
+  }
+
+  void _showActionSheet(BuildContext context, String userId, int index) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoActionSheet(
+        title: Text(reportThis),
+        message: Text(tellUs),
+        actions: <CupertinoActionSheetAction>[
+          CupertinoActionSheetAction(
+              onPressed: () => {
+                    // report comment
+                  },
+              child: Text(spam, style: TextStyle(color: ACCENT_PRIMARY))),
+          CupertinoActionSheetAction(
+              onPressed: () => {
+                    // report comment
+                  },
+              child: Text(abusive, style: TextStyle(color: ACCENT_PRIMARY))),
+          CupertinoActionSheetAction(
+              onPressed: () => {
+                    // report comment
+                  },
+              child: Text(falseInfo, style: TextStyle(color: ACCENT_PRIMARY))),
+          CupertinoActionSheetAction(
+              onPressed: () => {
+                    // report comment
+                  },
+              child: Text(harassment, style: TextStyle(color: ACCENT_PRIMARY))),
+          CupertinoActionSheetAction(
+              onPressed: () => {
+                    // report comment
+                  },
+              child: Text(other, style: TextStyle(color: ACCENT_PRIMARY))),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(context),
+            child: Text(cancel, style: TextStyle(color: ACCENT_PRIMARY))),
+      ),
+    );
+  }
+
+  Widget reportUserWidget() {
+    return Container(
+      margin:
+          const EdgeInsets.symmetric(horizontal: padding, vertical: padding),
+      padding: const EdgeInsets.symmetric(vertical: padding / 2),
+      decoration: BoxDecoration(
+          color: G_400, borderRadius: BorderRadius.circular(buttonsRadius)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SvgPicture.asset(circle),
+          const SizedBox(width: padding / 2),
+          Column(
+            children: [
+              Text(userBlocked, style: size14semibold),
+              Text(noCommentsShown, style: size14medium),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget reportCommentWidget() {
+    return Container(
+      margin:
+          const EdgeInsets.symmetric(horizontal: padding, vertical: padding),
+      padding: const EdgeInsets.symmetric(vertical: padding / 2),
+      decoration: BoxDecoration(
+          color: G_400, borderRadius: BorderRadius.circular(buttonsRadius)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SvgPicture.asset(tickCircle),
+          const SizedBox(width: padding / 2),
+          Column(
+            children: [
+              Text(thanksFor, style: size14semibold),
+              Text(weWill, style: size14medium),
+            ],
+          )
+        ],
+      ),
     );
   }
 
@@ -743,7 +971,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     bool isPenalties = widget.match.state.score.penalties != null;
 
     return InkWell(
-      onTap: () {
+      onTap: () async {
         _focusNode.unfocus();
         _panelController.close();
       },
@@ -774,7 +1002,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             ? statisticsWidget(screenHeight, screenWidth)
             : isH2hSelected
                 ? h2hWidget(screenHeight, screenWidth)
-                : commentsWidget(screenHeight, screenWidth, minPanelHeight),
+                : commentsWidget(screenHeight, screenWidth, minPanelHeight, sc),
         body: Scaffold(
             extendBodyBehindAppBar: true,
             body: SizedBox(
@@ -912,6 +1140,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     _scrollController.dispose();
     _focusNode.dispose();
     _commentController.dispose();
+    _commentKeys.clear();
     super.dispose();
   }
 }

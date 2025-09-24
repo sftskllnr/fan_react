@@ -22,6 +22,7 @@ class Achievements extends StatefulWidget {
 class _AchievementsState extends State<Achievements> {
   late StreamSubscription<List<Achievement>> _achievementSubscription;
   List<Achievement> _achievements = [];
+  List<String> _previouslyUnlocked = [];
 
   @override
   void initState() {
@@ -41,13 +42,33 @@ class _AchievementsState extends State<Achievements> {
         firestoreService.getUserAchievementsStream(user.uid).listen(
       (achievements) {
         if (mounted) {
-          setState(() => _achievements = achievements);
+          setState(() {
+            _achievements = achievements;
+          });
+
+          if (_previouslyUnlocked.isEmpty) {
+            _previouslyUnlocked = achievements
+                .where((achievement) => achievement.isUnlocked)
+                .map((achievement) => achievement.id)
+                .toList();
+            return;
+          }
+
+          final currentUnlocked = achievements
+              .where((achievement) => achievement.isUnlocked)
+              .map((achievement) => achievement.id)
+              .toList();
+
+          final newlyUnlocked = currentUnlocked
+              .where((id) => !_previouslyUnlocked.contains(id))
+              .toList();
+
           for (var achievement in achievements) {
-            if (achievement.isUnlocked) {
-              // should be fixed
+            if (newlyUnlocked.contains(achievement.id)) {
               showAchivementSnackbar(context, achievement.name, tapView);
             }
           }
+          _previouslyUnlocked = currentUnlocked;
         }
       },
       onError: (error) {

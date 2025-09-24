@@ -484,8 +484,12 @@ class _MatchesState extends State<Matches> {
   }
 
   Map<String, List<Match>> groupMatchesByDate(List<Match> matches) {
+    final sortedMatches = List<Match>.from(matches)
+      ..sort(
+          (a, b) => DateTime.parse(b.date).compareTo(DateTime.parse(a.date)));
+
     final Map<String, List<Match>> groupedMatches = {};
-    for (var match in matches) {
+    for (var match in sortedMatches) {
       final date =
           DateFormat('EEEE, dd MMMM yyyy').format(DateTime.parse(match.date));
       if (!groupedMatches.containsKey(date)) {

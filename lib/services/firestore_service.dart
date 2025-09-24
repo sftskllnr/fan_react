@@ -6,6 +6,7 @@ import 'package:fan_react/models/match/match.dart';
 import 'package:fan_react/models/user/user_profile.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -35,6 +36,9 @@ class FirestoreService {
 
   CollectionReference get userLoginHistoryCollection =>
       _firestore.collection('users').doc(user?.uid).collection('loginHistory');
+
+  CollectionReference get userReportsCollection =>
+      _firestore.collection('users').doc(user?.uid).collection('reportedUsers');
 
   Future<void> addMatchesList(List<Match> matches) async {
     final existingIds = (await matchesCollection.limit(1).get())
@@ -230,17 +234,49 @@ class FirestoreService {
     });
   }
 
-  Future<List<Map<String, dynamic>>> getCommentsMatch(int matchId) async {
-    final querySnapshot = await matchesCollection
-        .doc(matchId.toString())
-        .collection('comments')
-        .orderBy('timestamp', descending: false)
-        .get();
-    return querySnapshot.docs.map((doc) {
-      final data = doc.data();
-      data['commentId'] = doc.id;
-      return data;
-    }).toList();
+  Future<void> reportUser(String reportedUserId) async {
+    if (user == null) {
+      throw Exception('User must be authenticated to report a user.');
+    }
+
+    final reportRef = userReportsCollection.doc(reportedUserId);
+    await reportRef.set({
+      'reportedUserId': reportedUserId,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<Map<String, dynamic>>> getCommentsMatch(int matchId) {
+    if (user == null) {
+      throw Exception('User must be authenticated to retrieve comments.');
+    }
+
+    return CombineLatestStream.combine2(
+      matchesCollection
+          .doc(matchId.toString())
+          .collection('comments')
+          .orderBy('timestamp', descending: false)
+          .snapshots(),
+      userReportsCollection.snapshots(),
+      (QuerySnapshot<Map<String, dynamic>> commentsSnapshot,
+          QuerySnapshot<Object?> reportsSnapshot) {
+        // Get list of reported user IDs
+        final reportedUserIds = reportsSnapshot.docs
+            .map((doc) => (doc.data() as Map<String, dynamic>)['reportedUserId']
+                as String)
+            .toSet();
+
+        // Map comments and filter out those from reported users
+        return commentsSnapshot.docs
+            .map((doc) {
+              final data = doc.data();
+              data['commentId'] = doc.id;
+              return data;
+            })
+            .where((data) => !reportedUserIds.contains(data['userId']))
+            .toList();
+      },
+    );
   }
 
   Future<List<Match>> getMatchesWithUserActivity() async {
@@ -276,7 +312,7 @@ class FirestoreService {
     }
   }
 
-  // Helper methods to check user activit
+  // Helper methods to check user activity
   Future<bool> _hasUserComments(int matchId, String userId) async {
     final commentsQuery = matchesCollection
         .doc(matchId.toString())

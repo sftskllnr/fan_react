@@ -131,6 +131,23 @@ String delete = 'Delete';
 String penalties = 'Penalties';
 String noStatistic = 'No statistic found';
 String reload = 'Reload';
+String reportComment = 'Report comment';
+String blockUser = 'Block user';
+String reportThis = 'Report this comment';
+String spam = 'Spam';
+String abusive = 'Abusive or offensive';
+String falseInfo = 'False information';
+String harassment = 'Harassment';
+String other = 'Other';
+String thanksFor = 'Thanks for your report';
+String weWill = 'We\'ll review it shortly';
+String userBlocked = 'User blocked';
+String noCommentsShown = 'No more comments shown';
+String tellUs =
+    'Tell us why you’re reporting this. Your feedback helps keep the community safe';
+String block = 'Block';
+String allCommentsFrom =
+    'All comments from this user will be hidden. You can unblock them anytime in Settings';
 
 // HISTORY
 String noActivity = 'No activity yet';
