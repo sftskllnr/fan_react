@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
@@ -5,6 +6,9 @@ import 'package:fan_react/main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String userName;
@@ -18,12 +22,138 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController nameTextController;
   late FocusNode focusNode;
   bool editSuccess = true;
+  String? _avatarPath;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     nameTextController = TextEditingController(text: widget.userName);
     focusNode = FocusNode();
+    _loadAvatar();
+  }
+
+  Future<void> _loadAvatar() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final user = FirebaseAuth.instance.currentUser;
+    final avatarFile = File('${directory.path}/${user?.uid}_avatar.png');
+    if (await avatarFile.exists()) {
+      setState(() {
+        _avatarPath = avatarFile.path;
+      });
+    }
+  }
+
+  Future<bool> _requestPermission(Permission permission) async {
+    final status = await permission.status;
+    if (status.isGranted) {
+      return true;
+    } else if (status.isDenied || status.isPermanentlyDenied) {
+      final newStatus = await permission.request();
+      if (newStatus.isGranted) {
+        return true;
+      } else if (newStatus.isPermanentlyDenied && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Permission permanently denied. Please enable it in app settings.'),
+            backgroundColor: SYSTEM_ONE,
+            action: SnackBarAction(
+              label: 'Settings',
+              textColor: ACCENT_PRIMARY,
+              onPressed: () => openAppSettings(),
+            ),
+          ),
+        );
+        return false;
+      }
+      // If denied (not permanently), prompt again
+      if (mounted && newStatus.isDenied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Permission required to access ${permission == Permission.camera ? "camera" : "gallery"}. Please grant permission.'),
+            backgroundColor: SYSTEM_ONE,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: ACCENT_PRIMARY,
+              onPressed: () => permission.request(),
+            ),
+          ),
+        );
+      }
+      return false;
+    }
+    return false;
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    bool hasPermission = false;
+    if (source == ImageSource.camera) {
+      hasPermission = await _requestPermission(Permission.camera);
+    } else {
+      hasPermission = await _requestPermission(Permission.photos);
+    }
+
+    if (!hasPermission) return;
+
+    try {
+      final pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 200,
+        maxHeight: 200,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null && mounted) {
+        final directory = await getApplicationDocumentsDirectory();
+        final user = FirebaseAuth.instance.currentUser;
+        final avatarFile = File('${directory.path}/${user?.uid}_avatar.png');
+        await pickedFile.saveTo(avatarFile.path);
+
+        setState(() {
+          _avatarPath = avatarFile.path;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: SYSTEM_ONE,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showImageSourceOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_library, color: ACCENT_PRIMARY),
+              title: Text('Choose from Gallery', style: size15semibold),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.camera_alt, color: ACCENT_PRIMARY),
+              title: Text('Take a Photo', style: size15semibold),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _saveChanges() async {
@@ -70,16 +200,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         width: screenWidth,
         child: Column(
           children: [
-            SizedBox(
-                height: padding * 7,
-                width: padding * 7,
-                child: Image.asset(ellipse)),
+            Container(
+              height: padding * 7,
+              width: padding * 7,
+              decoration: BoxDecoration(
+                  shape: BoxShape.circle, border: Border.all(color: G_400)),
+              child: ClipOval(
+                  child: _avatarPath != null
+                      ? Image.file(File(_avatarPath!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Image.asset(ellipse, fit: BoxFit.cover))
+                      : Image.asset(ellipse, fit: BoxFit.cover)),
+            ),
             const SizedBox(height: padding / 2),
             InkWell(
-              onTap: () {},
-              child: Text(setNewPhoto,
-                  style: size18semibold.copyWith(color: ACCENT_PRIMARY)),
-            )
+              onTap: _showImageSourceOptions,
+              child: Text(
+                setNewPhoto,
+                style: size18semibold.copyWith(color: ACCENT_PRIMARY),
+              ),
+            ),
           ],
         ),
       );

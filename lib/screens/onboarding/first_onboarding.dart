@@ -1,7 +1,7 @@
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
-import 'package:fan_react/screens/home/home_screen.dart';
+import 'package:fan_react/screens/guide/guide_screen.dart';
 import 'package:fan_react/screens/onboarding/medium_button.dart';
 import 'package:fan_react/screens/onboarding/second_onboarding.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +16,7 @@ class FirstOnboarding extends StatelessWidget {
 
     void goToHomeScreen() {
       Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (builder) => const HomeScreen()),
+          MaterialPageRoute(builder: (builder) => const GuideScreen()),
           (Route<dynamic> route) => false);
     }
 

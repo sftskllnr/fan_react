@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:app_settings/app_settings.dart';
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
@@ -14,6 +15,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -29,6 +31,7 @@ class _ProfileState extends State<Profile> {
   late StreamSubscription<InternetStatus> _subscription;
   InternetStatus? _connectionStatus;
   final Uri _url = Uri.parse(googleUrl);
+  String? _avatarPath;
 
   @override
   void initState() {
@@ -42,8 +45,19 @@ class _ProfileState extends State<Profile> {
         if (mounted) showNoInternetSnackbar(context, getUserProfile);
       }
     });
-
     getUserProfile();
+    _loadAvatar();
+  }
+
+  Future<void> _loadAvatar() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final user = FirebaseAuth.instance.currentUser;
+    final avatarFile = File('${directory.path}/${user?.uid}_avatar.png');
+    if (await avatarFile.exists()) {
+      setState(() {
+        _avatarPath = avatarFile.path;
+      });
+    }
   }
 
   Future<void> getUserProfile() async {
@@ -85,6 +99,7 @@ class _ProfileState extends State<Profile> {
     if (result == true) {
       await getUserProfile();
     }
+    await _loadAvatar();
   }
 
   Future<void> _launchUrl() async {
@@ -123,7 +138,19 @@ class _ProfileState extends State<Profile> {
         width: screenWidth,
         child: Column(
           children: [
-            const CircleAvatar(radius: padding * 3.5),
+            Container(
+              height: padding * 7,
+              width: padding * 7,
+              decoration: BoxDecoration(
+                  shape: BoxShape.circle, border: Border.all(color: G_400)),
+              child: ClipOval(
+                  child: _avatarPath != null
+                      ? Image.file(File(_avatarPath!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Image.asset(ellipse, fit: BoxFit.cover))
+                      : Image.asset(ellipse, fit: BoxFit.cover)),
+            ),
             const SizedBox(height: padding / 2),
             Text(userProfile?.name ?? '', style: size24bold),
             const SizedBox(height: padding),

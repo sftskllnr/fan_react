@@ -8,10 +8,20 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Permissions for gallery (Android < 13) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- Permissions for gallery (Android 13+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Optional: Declare features for camera (helps with Play Store compatibility) -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:label="fan_react"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true"
+        >
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/models/achievement/achievement.dart';
 import 'package:fan_react/models/comment/comment.dart';
 import 'package:fan_react/models/match/match.dart';
@@ -645,7 +646,7 @@ class FirestoreService {
     final userId = user.uid;
     final randomNumber = random.nextInt(100000);
     final name = 'user#$randomNumber';
-    final avatar = 'https://i.pravatar.cc/150?img=${random.nextInt(70) + 1}';
+    final avatar = ellipse;
 
     final userProfile = UserProfile(id: userId, name: name, avatar: avatar);
     await usersCollection.doc(userId).set(userProfile);

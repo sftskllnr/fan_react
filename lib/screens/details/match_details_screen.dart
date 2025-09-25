@@ -554,10 +554,16 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        CircleAvatar(
-                                            radius: 20,
-                                            backgroundImage: NetworkImage(
-                                                'https://i.pravatar.cc/150?img=$originalIndex')),
+                                        ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(45),
+                                            child: isAuthor
+                                                ? Image.asset(ellipse,
+                                                    height: 40, width: 40)
+                                                : Image.network(
+                                                    'https://i.pravatar.cc/150?img=$originalIndex',
+                                                    height: 40,
+                                                    width: 40)),
                                         const SizedBox(width: padding / 2),
                                         Expanded(
                                             child: Column(
