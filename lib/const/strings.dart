@@ -184,6 +184,12 @@ String saveChanges = 'Save changes';
 String enterYourName = 'Enter your name and add a profile photo if you wish.';
 String youWillStart = 'You\'ll start seeing this user\'s comments again';
 String thisNickname = 'This nickname is already in use. Try another one.';
+String discardChanges = 'Discard changes?';
+String changesSaved = 'Changes saved successfully';
+String keepEditing = 'Keep Editing';
+String discard = 'Discard';
+String youMade =
+    'You\'ve made changes that haven\'t been saved. Are you sure you want to leave?';
 String googleUrl = 'https://google.com';
 String deleteYour = 'Delete your profile?';
 String thisNick = 'This nickname is already in use. Try another one.';

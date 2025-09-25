@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fan_react/const/const.dart';
 import 'package:fan_react/const/strings.dart';
 import 'package:fan_react/const/theme.dart';
@@ -10,6 +12,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:fan_react/models/match/match.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -46,6 +49,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   String? _reportedUserId;
   int? selectedUserIndex;
   int? selectedCommentIndex;
+  String? _avatarPath;
 
   @override
   void initState() {
@@ -54,6 +58,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     _focusNode = FocusNode();
     _scrollController = ScrollController();
     _commentController = TextEditingController();
+
+    _loadAvatar();
 
     getLastFiveMatches(widget.match.homeTeam.id, true).whenComplete(() {
       getTeamResults(homeTeamMatches, widget.match.homeTeam.id, true);
@@ -303,6 +309,19 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                             color: Colors.red, fontSize: 17)))
               ]);
         });
+  }
+
+  Future<void> _loadAvatar() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final user = FirebaseAuth.instance.currentUser;
+    final avatarFile = File('${directory.path}/${user?.uid}_avatar.png');
+    var exist = await avatarFile.exists();
+
+    if (await avatarFile.exists()) {
+      setState(() {
+        _avatarPath = avatarFile.path;
+      });
+    }
   }
 
   Widget teamLogoStats(Match match, bool isHome) {
@@ -557,13 +576,29 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                                         ClipRRect(
                                             borderRadius:
                                                 BorderRadius.circular(45),
-                                            child: isAuthor
-                                                ? Image.asset(ellipse,
-                                                    height: 40, width: 40)
-                                                : Image.network(
-                                                    'https://i.pravatar.cc/150?img=$originalIndex',
+                                            child: isAuthor &&
+                                                    _avatarPath != null
+                                                ? SizedBox(
                                                     height: 40,
-                                                    width: 40)),
+                                                    width: 40,
+                                                    child: Image.file(
+                                                        File(_avatarPath!),
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (context,
+                                                                error,
+                                                                stackTrace) =>
+                                                            Image.asset(ellipse,
+                                                                fit: BoxFit
+                                                                    .cover)),
+                                                  )
+                                                : isAuthor &&
+                                                        _avatarPath == null
+                                                    ? Image.asset(ellipse,
+                                                        height: 40, width: 40)
+                                                    : Image.network(
+                                                        'https://i.pravatar.cc/150?img=$originalIndex',
+                                                        height: 40,
+                                                        width: 40)),
                                         const SizedBox(width: padding / 2),
                                         Expanded(
                                             child: Column(

@@ -93,13 +93,24 @@ class _ProfileState extends State<Profile> {
   }
 
   void goToEditProfileScreen() async {
-    final result = await Navigator.of(context).push<bool>(MaterialPageRoute(
-        builder: (builder) =>
-            EditProfileScreen(userName: userProfile?.name ?? '')));
-    if (result == true) {
-      await getUserProfile();
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+          builder: (builder) =>
+              EditProfileScreen(userName: userProfile?.name ?? '')),
+    );
+    if (mounted) {
+      setState(() {
+        if (result != null && result.isNotEmpty) {
+          userProfile = userProfile?.copyWith(name: result) ??
+              UserProfile(
+                  id: userProfile?.id ?? '', name: result, avatar: ellipse);
+        }
+      });
+      if (result == null || result.isEmpty) {
+        await getUserProfile();
+      }
+      await _loadAvatar();
     }
-    await _loadAvatar();
   }
 
   Future<void> _launchUrl() async {
